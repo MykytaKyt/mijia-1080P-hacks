@@ -27,6 +27,22 @@ hook, see below).
 | Wi-Fi network set from the SD card | `miio_ssid`, `miio_passwd`, `miio_key_mgmt` | empty |
 | Custom hostname | `HOSTNAME` | `Valhalla` |
 
+## Screenshots
+
+Wi-Fi setup page on a phone (`http://192.168.14.1` on the `Mijia-Setup-XXXX` network):
+
+<p>
+  <img src="images/screenshots/setup.png" width="300" alt="Wi-Fi setup page">
+  <img src="images/screenshots/setup-done.png" width="300" alt="Wi-Fi setup page after Connect">
+</p>
+
+Settings page (`http://<camera-ip>:8080`), light and dark mode:
+
+<p>
+  <img src="images/screenshots/settings.png" width="420" alt="Settings page">
+  <img src="images/screenshots/settings-dark.png" width="420" alt="Settings page in dark mode">
+</p>
+
 ## Installation
 
 1. Format a microSD card as **FAT32**.

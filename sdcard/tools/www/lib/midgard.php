@@ -135,7 +135,14 @@ function cam_status()
 	$up = (int)@file_get_contents('/proc/uptime');
 	$s['uptime'] = sprintf('%dd %02dh %02dm', $up / 86400, ($up / 3600) % 24, ($up / 60) % 60);
 	$s['time'] = trim(shell_exec('date'));
-	$s['wifi'] = trim(@file_get_contents('/tmp/wifi_state'));
+	$states = array(
+		'boot' => 'Connecting…',
+		'ok' => 'Connected',
+		'ap' => 'Setup mode (access point)',
+		'try' => 'Trying the saved network…',
+	);
+	$state = trim(@file_get_contents('/tmp/wifi_state'));
+	$s['wifi'] = isset($states[$state]) ? $states[$state] : $state;
 	$s['rtsp'] = trim(shell_exec('/tmp/rtsp_start.sh status 2>/dev/null'));
 	$s['free'] = trim(shell_exec("df -h /tmp/sd 2>/dev/null | tail -n 1 | awk '{print $4 \" free of \" $2}'"));
 	$s['snapshot'] = is_file(TOOLS_DIR . '/bin/ffmpeg');
