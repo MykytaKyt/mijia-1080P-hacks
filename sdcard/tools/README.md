@@ -8,3 +8,7 @@ Binaries and helper scripts used by `valhalla.sh`. See the main README for detai
 * `pre-ota.sh`: reference copy of the firmware's pre-update script (not used)
 * `sign_ft_boot.sh`: re-signs `../ft/ft_boot.sh` (run on a PC)
 * `build.txt`: how to build lighttpd, PHP and Samba
+* `valhalla_lib.sh`: shared shell helpers (config, logging, Wi-Fi), sourced by the scripts above
+* `valhallad.sh`: background helper (Wi-Fi setup mode, service watchdog, NTP)
+* `www/`: settings page (`index.php`, port 8080), Wi-Fi setup page (`setup/`, port 80 in setup mode), `snapshot.php`
+* `etc/lighttpd-setup.conf`: web server config for the setup page

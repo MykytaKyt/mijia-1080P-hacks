@@ -10,41 +10,16 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.0"
+SCRIPT_VERSION="2.1"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools
 INI=$sd_mountdir/midgard.ini
 LOGDIR=$sd_mountdir/logs
-LOGFILE=$LOGDIR/log-$(date +"%Y%m%d%H%M").log
+LOGFILE=""
 
-## --- helpers ---------------------------------------------------------
-
-log()
-{
-	echo "$*"
-	echo "$(date +"%Y-%m-%d %H:%M:%S") $*" >> "$LOGFILE" 2>/dev/null
-}
-
-## Run a command and append its output to the log.
-run()
-{
-	"$@" >> "$LOGFILE" 2>&1
-}
-
-## cfg KEY DEFAULT - read KEY from midgard.ini (tolerates CRLF and spaces).
-cfg()
-{
-	_v=$(grep -E "^[[:space:]]*$1[[:space:]]*=" "$INI" 2>/dev/null | tail -n 1 |
-		cut -d '=' -f 2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-	[ -z "$_v" ] && _v=$2
-	echo "$_v"
-}
-
-enabled()
-{
-	[ "$1" = "1" ]
-}
+## log, run, cfg, enabled and the Wi-Fi helpers
+. "$TOOLS/valhalla_lib.sh"
 
 ## Replace a file that lives on a read-only/flash location with a stub
 ## script, by bind-mounting a copy from /tmp over it.
@@ -72,12 +47,15 @@ load_config()
 	SSH_ROOT_PASS=$(cfg SSH_ROOT_PASS "qwerty123456")
 	CAM_HOSTNAME=$(cfg HOSTNAME "Valhalla")
 	DISABLED_OTA=$(cfg DISABLED_OTA 0)
-	HTTP_ENABLED=$(cfg HTTP_ENABLED 0)
+	HTTP_ENABLED=$(cfg HTTP_ENABLED 1)
 	SAMBA_ENABLED=$(cfg SAMBA_ENABLED 0)
 	ENGLISH_VOICE=$(cfg ENGLISH_VOICE 1)
 	WIFI_SSID=$(cfg miio_ssid "")
 	WIFI_PASSWD=$(cfg miio_passwd "")
 	WIFI_KEY_MGMT=$(cfg miio_key_mgmt "WPA")
+	RTSP_ALLOW=$(cfg RTSP_ALLOW "")
+	TIMEZONE=$(cfg TIMEZONE "")
+	LOG_KEEP=$(cfg LOG_KEEP 10)
 
 	log "Configuration:"
 	log "  CLOUD_DISABLED=$CLOUD_DISABLED"
@@ -91,6 +69,8 @@ load_config()
 	log "  SAMBA_ENABLED=$SAMBA_ENABLED"
 	log "  ENGLISH_VOICE=$ENGLISH_VOICE"
 	log "  miio_ssid=$WIFI_SSID"
+	log "  RTSP_ALLOW=$RTSP_ALLOW"
+	log "  TIMEZONE=$TIMEZONE"
 
 	if [ "$SSH_ROOT_PASS" = "qwerty123456" ]; then
 		log "WARNING: the default root password is in use, change SSH_ROOT_PASS in midgard.ini"
@@ -216,39 +196,15 @@ setup_ota()
 }
 
 ## Join the Wi-Fi network from midgard.ini instead of the one stored by
-## the Mi Home app (nvram). Same steps as the stock wifi_start.sh.
+## the Mi Home app (nvram).
 connect_wifi_override()
 {
 	[ -n "$WIFI_SSID" ] || return 0
 	## wifi_start.sh reads midgard.ini itself when it called us.
 	[ "$VALHALLA_FROM_WIFI" = "1" ] && return 0
-
-	log "Connecting to Wi-Fi '$WIFI_SSID' (from midgard.ini)"
-	_conf=/tmp/wpa_supplicant.conf
-	{
-		echo "ctrl_interface=/var/run/wpa_supplicant"
-		echo "update_config=1"
-		echo "network={"
-		echo "	ssid=\"$WIFI_SSID\""
-		if [ "$WIFI_KEY_MGMT" = "NONE" ] || [ -z "$WIFI_PASSWD" ]; then
-			echo "	key_mgmt=NONE"
-		else
-			echo "	psk=\"$WIFI_PASSWD\""
-			echo "	key_mgmt=WPA-PSK"
-			echo "	proto=WPA WPA2"
-		fi
-		echo "	scan_ssid=1"
-		echo "}"
-	} > "$_conf"
-	killall udhcpc wpa_supplicant hostapd udhcpd wpa_cli > /dev/null 2>&1
-	ifconfig uap0 down 2>/dev/null
-	ifconfig mlan0 up
-	iwconfig mlan0 mode Managed 2>/dev/null
-	mkdir -p /var/run/wpa_supplicant
-	run wpa_supplicant -Dnl80211 -imlan0 -c "$_conf" -B
-	[ -x /mnt/data/ot_wifi_tool/wpa_event.sh ] &&
-		wpa_cli -i mlan0 -B -a /mnt/data/ot_wifi_tool/wpa_event.sh
-	run udhcpc -i mlan0 -S -b
+	# shellcheck disable=SC2034 # used by wifi_connect
+	[ "$WIFI_KEY_MGMT" = "NONE" ] && WIFI_PASSWD=""
+	wifi_connect
 }
 
 restart_wifi()
@@ -368,6 +324,77 @@ blink_leds()
 	$_led 1 1 1 100 200 2
 }
 
+## Number the logs by boot (the clock is often wrong at boot) and keep
+## only the newest LOG_KEEP of them.
+open_log()
+{
+	mkdir -p "$LOGDIR"
+	_n=$(cat "$LOGDIR/.boot_count" 2>/dev/null)
+	case "$_n" in
+	'' | *[!0-9]*) _n=0 ;;
+	esac
+	_n=$((_n + 1))
+	echo "$_n" > "$LOGDIR/.boot_count"
+	LOGFILE=$LOGDIR/boot-$(printf '%05d' "$_n")-$(date +"%Y%m%d%H%M").log
+
+	case "$LOG_KEEP" in
+	'' | *[!0-9]*) LOG_KEEP=10 ;;
+	esac
+	## Newest first (by boot number); keep LOG_KEEP logs including this one.
+	ls -1r "$LOGDIR"/boot-*.log 2>/dev/null | tail -n +"$LOG_KEEP" | while read -r _old; do
+		rm -f "$_old"
+	done
+}
+
+set_timezone()
+{
+	[ -n "$TIMEZONE" ] || return 0
+	[ -f /etc/.valhalla ] || return 0
+	log "Setting time zone to $TIMEZONE"
+	echo "$TIMEZONE" > /etc/TZ
+	export TZ="$TIMEZONE"
+}
+
+## rtsp_basic has no password. Optionally limit who can reach it.
+setup_rtsp_firewall()
+{
+	enabled "$RTSP_ENABLED" || return 0
+	[ -n "$RTSP_ALLOW" ] || return 0
+	if ! command -v iptables > /dev/null 2>&1; then
+		log "WARNING: iptables not available, RTSP_ALLOW is ignored"
+		return 0
+	fi
+	log "Allowing RTSP only from: $RTSP_ALLOW"
+	iptables -N VALHALLA_RTSP 2>/dev/null || iptables -F VALHALLA_RTSP
+	iptables -A VALHALLA_RTSP -i lo -j ACCEPT
+	for _net in $(echo "$RTSP_ALLOW" | tr ',' ' '); do
+		run iptables -A VALHALLA_RTSP -s "$_net" -j ACCEPT
+	done
+	iptables -A VALHALLA_RTSP -j DROP
+	iptables -C INPUT -p tcp --dport 554 -j VALHALLA_RTSP 2>/dev/null ||
+		run iptables -I INPUT -p tcp --dport 554 -j VALHALLA_RTSP
+}
+
+## Background helper: Wi-Fi setup mode, service watchdog, NTP.
+start_daemon()
+{
+	if [ -f /var/run/valhallad.pid ] && kill -0 "$(cat /var/run/valhallad.pid)" 2>/dev/null; then
+		return 0
+	fi
+	cp "$TOOLS/valhalla_lib.sh" /tmp/valhalla_lib.sh
+	cp "$TOOLS/valhallad.sh" /tmp/valhallad.sh
+	{
+		echo "sd_mountdir='$sd_mountdir'"
+		echo "TOOLS='$TOOLS'"
+		echo "INI='$INI'"
+		echo "LOGFILE='$LOGFILE'"
+		echo "HTTP_ENABLED='$HTTP_ENABLED'"
+		echo "SAMBA_ENABLED='$SAMBA_ENABLED'"
+	} > /tmp/valhalla.env
+	log "Starting valhallad (Wi-Fi setup mode, watchdog, NTP)"
+	sh /tmp/valhallad.sh < /dev/null > /dev/null 2>&1 &
+}
+
 ## --- main ------------------------------------------------------------
 
 valhalla_main()
@@ -376,7 +403,8 @@ valhalla_main()
 		echo "valhalla.sh already ran on this boot, skipping"
 		return 0
 	fi
-	mkdir -p "$LOGDIR"
+	LOG_KEEP=$(cfg LOG_KEEP 10)
+	open_log
 
 	log "Valhalla script v$SCRIPT_VERSION starting"
 	load_config
@@ -386,6 +414,7 @@ valhalla_main()
 	echo 4 > /tmp/ft_mode
 
 	setup_etc_overlay && set_root_password
+	set_timezone
 	start_ssh
 	enabled "$ENGLISH_VOICE" && set_english_voice
 	setup_ota
@@ -395,8 +424,10 @@ valhalla_main()
 	init_gm_driver
 	setup_cloud
 	setup_rtsp
+	setup_rtsp_firewall
 	start_http
 	start_samba
+	start_daemon
 
 	log "Valhalla script finished OK"
 	blink_leds

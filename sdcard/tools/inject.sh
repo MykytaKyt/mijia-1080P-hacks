@@ -37,6 +37,12 @@ $BB mkdir -p $pathDest
 log "/proc/mtd:"
 run $BB cat /proc/mtd
 
+## Stop the background helper so it does not restart anything.
+$BB touch /tmp/valhalla.stop
+if [ -f /var/run/valhallad.pid ]; then
+	$BB kill "$($BB cat /var/run/valhallad.pid)" 2>/dev/null
+fi
+
 ## Stop the RTSP server: it runs from the SD card and keeps it busy.
 log "Stopping RTSP server"
 $BB touch /tmp/rtsp.stop
