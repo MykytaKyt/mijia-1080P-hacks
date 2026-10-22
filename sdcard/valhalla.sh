@@ -1,256 +1,405 @@
-SCRIPT_VERSION="1.8"
+#!/bin/sh
+## =====================================================================
+##  valhalla.sh - main script of the Mijia 1080p hack.
+##
+##  Runs from the SD card (mounted at /tmp/sd) in two ways:
+##    * sourced by ft/ft_boot.sh (factory-test boot hook), or
+##    * executed by the patched /mnt/data/ot_wifi_tool/wifi_start.sh.
+##  A lock in /tmp makes sure the work is only done once per boot.
+##
+##  All settings live in midgard.ini on the SD card root.
+## =====================================================================
 
-NOW=$(date +"%Y%m%d%H%M")
-LOGFILE="log-$NOW.log"
+SCRIPT_VERSION="2.0"
+
 sd_mountdir=/tmp/sd
+TOOLS=$sd_mountdir/tools
+INI=$sd_mountdir/midgard.ini
+LOGDIR=$sd_mountdir/logs
+LOGFILE=$LOGDIR/log-$(date +"%Y%m%d%H%M").log
 
-echo -e "Customm Script Start v$SCRIPT_VERSION"
-echo -e "Running Customm Script v$SCRIPT_VERSION" > $sd_mountdir/$LOGFILE
+## --- helpers ---------------------------------------------------------
 
-## Config
-##################################################################################			
-CLOUD_DISABLED=$(awk -F "=" '/CLOUD_DISABLED/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$CLOUD_DISABLED" ];then
- CLOUD_DISABLED=0
-fi
+log()
+{
+	echo "$*"
+	echo "$(date +"%Y-%m-%d %H:%M:%S") $*" >> "$LOGFILE" 2>/dev/null
+}
 
-CLOUD_STREAMING_DISABLED=$(awk -F "=" '/CLOUD_STREAMING_DISABLED/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$CLOUD_STREAMING_DISABLED" ];then
- CLOUD_STREAMING_DISABLED=0
-fi
+## Run a command and append its output to the log.
+run()
+{
+	"$@" >> "$LOGFILE" 2>&1
+}
 
-RTSP_ENABLED=$(awk -F "=" '/RTSP_ENABLED/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$RTSP_ENABLED" ];then
- RTSP_ENABLED=1
-fi
+## cfg KEY DEFAULT - read KEY from midgard.ini (tolerates CRLF and spaces).
+cfg()
+{
+	_v=$(grep -E "^[[:space:]]*$1[[:space:]]*=" "$INI" 2>/dev/null | tail -n 1 |
+		cut -d '=' -f 2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+	[ -z "$_v" ] && _v=$2
+	echo "$_v"
+}
 
-CONFIG_LINE=$(awk -F "=" '/CONFIG_LINE/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$CONFIG_LINE" ];then
- CONFIG_LINE="-b4098 -f20 -w1920 -h1080"
-fi
+enabled()
+{
+	[ "$1" = "1" ]
+}
 
-SSH_ROOT_PASS=$(awk -F "=" '/SSH_ROOT_PASS/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$SSH_ROOT_PASS" ];then
- SSH_ROOT_PASS="qwerty123456"
-fi
+## Replace a file that lives on a read-only/flash location with a stub
+## script, by bind-mounting a copy from /tmp over it.
+stub_file()
+{
+	_target=$1
+	_code=$2
+	[ -f "$_target" ] || return 0
+	grep -q " $_target " /proc/mounts && return 0
+	_stub=/tmp/stub_$(basename "$_target")
+	printf '#!/bin/sh\n%s\n' "$_code" > "$_stub"
+	chmod 755 "$_stub"
+	run mount --bind "$_stub" "$_target" && log "  stubbed $_target"
+}
 
-DISABLED_OTA=$(awk -F "=" '/DISABLED_OTA/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$DISABLED_OTA" ];then
- DISABLED_OTA=0
-fi
+## --- steps -----------------------------------------------------------
 
-HTTP_ENABLED=$(awk -F "=" '/HTTP_ENABLED/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$HTTP_ENABLED" ];then
- HTTP_ENABLED=0
-fi
+load_config()
+{
+	CLOUD_DISABLED=$(cfg CLOUD_DISABLED 0)
+	CLOUD_STREAMING_DISABLED=$(cfg CLOUD_STREAMING_DISABLED 0)
+	RTSP_ENABLED=$(cfg RTSP_ENABLED 0)
+	CONFIG_LINE=$(cfg CONFIG_LINE "-b4096 -f20 -w1920 -h1080 -m1")
+	RTSP_LOG=$(cfg RTSP_LOG 0)
+	SSH_ROOT_PASS=$(cfg SSH_ROOT_PASS "qwerty123456")
+	CAM_HOSTNAME=$(cfg HOSTNAME "Valhalla")
+	DISABLED_OTA=$(cfg DISABLED_OTA 0)
+	HTTP_ENABLED=$(cfg HTTP_ENABLED 0)
+	SAMBA_ENABLED=$(cfg SAMBA_ENABLED 0)
+	ENGLISH_VOICE=$(cfg ENGLISH_VOICE 1)
+	WIFI_SSID=$(cfg miio_ssid "")
+	WIFI_PASSWD=$(cfg miio_passwd "")
+	WIFI_KEY_MGMT=$(cfg miio_key_mgmt "WPA")
 
-SAMBA_ENABLED=$(awk -F "=" '/SAMBA_ENABLED/ {print $2}' $sd_mountdir/midgard.ini)
-if [ -z "$SAMBA_ENABLED" ];then
- SAMBA_ENABLED=0
-fi
+	log "Configuration:"
+	log "  CLOUD_DISABLED=$CLOUD_DISABLED"
+	log "  CLOUD_STREAMING_DISABLED=$CLOUD_STREAMING_DISABLED"
+	log "  RTSP_ENABLED=$RTSP_ENABLED"
+	log "  CONFIG_LINE=$CONFIG_LINE"
+	log "  SSH_ROOT_PASS=<hidden, ${#SSH_ROOT_PASS} chars>"
+	log "  HOSTNAME=$CAM_HOSTNAME"
+	log "  DISABLED_OTA=$DISABLED_OTA"
+	log "  HTTP_ENABLED=$HTTP_ENABLED"
+	log "  SAMBA_ENABLED=$SAMBA_ENABLED"
+	log "  ENGLISH_VOICE=$ENGLISH_VOICE"
+	log "  miio_ssid=$WIFI_SSID"
 
-##################################################################################	
-
-echo -e "\nConfiguration:"  >> $sd_mountdir/$LOGFILE
-echo -e "  CLOUD_DISABLED=$CLOUD_DISABLED"  >> $sd_mountdir/$LOGFILE
-echo -e "  CLOUD_STREAMING_DISABLED=$CLOUD_STREAMING_DISABLED"  >> $sd_mountdir/$LOGFILE
-echo -e "  RTSP_ENABLED=$RTSP_ENABLED"  >> $sd_mountdir/$LOGFILE
-echo -e "  CONFIG_LINE=$CONFIG_LINE"  >> $sd_mountdir/$LOGFILE
-echo -e "  SSH_ROOT_PASS=$SSH_ROOT_PASS"  >> $sd_mountdir/$LOGFILE
-echo -e "  DISABLED_OTA=$DISABLED_OTA"  >> $sd_mountdir/$LOGFILE
-echo -e "  HTTP_ENABLED=$HTTP_ENABLED"  >> $sd_mountdir/$LOGFILE
-echo -e "  SAMBA_ENABLED=$SAMBA_ENABLED"  >> $sd_mountdir/$LOGFILE
-
-VERSION=/mnt/media/mmcblk0p1/os-release
-
-if [ -f $VERSION ];then
-	echo -e "\nos-version block: ">> $sd_mountdir/$LOGFILE
-	cat $VERSION >> $sd_mountdir/$LOGFILE 	
-fi
-VERSION=/etc/os-release
-if [ -f $VERSION ];then
-	echo -e "os-version">> $sd_mountdir/$LOGFILE
-	cat $VERSION >> $sd_mountdir/$LOGFILE 	
-else
-	echo -e "os-version find"
-	find / -name os-release >> $sd_mountdir/$LOGFILE
-fi
-
-
-echo "Forcing Mode 4"  >> $sd_mountdir/$LOGFILE
-ft_mode="4"
-echo $ft_mode > /tmp/ft_mode
-
-
-#if [ ! -d $sd_mountdir/tff2 ];then
-#	echo -e "\nBacking up /mnt/data partition"  >> $sd_mountdir/$LOGFILE
-#	mkdir $sd_mountdir/tff2
-#	cp -rf /mnt/data $sd_mountdir/tff2
-#fi
-
-echo -e " Staring SSH Server"  >> $sd_mountdir/$LOGFILE
-
-if [ -f $sd_mountdir/tools/dropbear/dropbearmulti ];then		
-	## /etc is part of the read-only file system and we need to write the password of root for SSH
-	## so just use /tmp and bind to /etc/bind
-	echo -e " Getting root access "  >> $sd_mountdir/$LOGFILE
-	mkdir /tmp/etc/  >> $sd_mountdir/$LOGFILE		
-	cp -r /etc /tmp/   >> $sd_mountdir/$LOGFILE		
-	mount --rbind /tmp/etc /etc >> $sd_mountdir/$LOGFILE
-	echo -e "$SSH_ROOT_PASS\n$SSH_ROOT_PASS" | passwd >> $sd_mountdir/$LOGFILE 2>&1	
-	
-	
-	mkdir /var/run/   >> $sd_mountdir/$LOGFILE
-	PIDFILE="/var/run/dropbear.pid"		
-	
-	## Part of the testing (I will clean it later)
-	mkdir /etc/dropbear
-	mkdir /etc/dropbear/etc
-	
-	## Code to test -- Security Purpose: recover previoys RSA keys from SDCARD	
-	if [ -f $sd_mountdir/tools/dropbear/dropbear_ecdsa_host_key ];then
-		cp $sd_mountdir/tools/dropbear/dropbear_ecdsa_host_key /etc/dropbear/dropbear_ecdsa_host_key
+	if [ "$SSH_ROOT_PASS" = "qwerty123456" ]; then
+		log "WARNING: the default root password is in use, change SSH_ROOT_PASS in midgard.ini"
 	fi
-		
-		
-	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$sd_mountdir/tools/libs
-		
-	echo -e "\n...Starting dropbear..." >> $sd_mountdir/$LOGFILE 2>&1
-	$sd_mountdir/tools/dropbear/dropbearmulti dropbear -E -R -p 22 -P $PIDFILE >> $sd_mountdir/$LOGFILE 2>&1
-	ln -s mkdir $sd_mountdir/tools/dropbear/dropbearmulti /etc/dropbear/scp
-	export PATH=$PATH:/etc/dropbear/	
-	## Code to test -- Security Purpose: Save the keys in the SDCARD 
-	if [ ! -f $sd_mountdir/tools/dropbear/dropbear_ecdsa_host_key ] && 
-		[ -f /etc/dropbear/dropbear_ecdsa_host_key ];then
-		cp /etc/dropbear/dropbear_ecdsa_host_key $sd_mountdir/tools/dropbear/dropbear_ecdsa_host_key
+	if [ ${#SSH_ROOT_PASS} -lt 8 ]; then
+		log "WARNING: SSH_ROOT_PASS is shorter than 8 characters"
 	fi
-	
-	
-	echo -e "\n...Changing Language to English..."  >> $sd_mountdir/$LOGFILE 2>&1
-	folderVoices=/mnt/data/sound
-	fileExample=booting
-	parent=`ls -al /mnt/data/sound/booting`
-	if [ "${parent%%*cn*}" == ${parent} ];then 
-		echo ".....Already installed"
-	elif [ -d $folderVoices ];then
-		rm $folderVoices/*
-		cd $folderVoices/en
-		for file in *;do
-			ln -s $folderVoices/en/$file $folderVoices/$file
+}
+
+log_versions()
+{
+	for _f in /mnt/media/mmcblk0p1/os-release /etc/os-release; do
+		if [ -f "$_f" ]; then
+			log "Contents of $_f:"
+			run cat "$_f"
+		fi
+	done
+}
+
+## /etc is on the read-only root filesystem. Copy it to /tmp and bind the
+## copy over /etc so we can set the root password and add init scripts.
+setup_etc_overlay()
+{
+	if [ -f /etc/.valhalla ]; then
+		return 0
+	fi
+	log "Creating writable /etc overlay"
+	mkdir -p /tmp/etc
+	cp -a /etc/. /tmp/etc/ 2>>"$LOGFILE" || cp -r /etc/. /tmp/etc/ 2>>"$LOGFILE"
+	if run mount --rbind /tmp/etc /etc; then
+		touch /etc/.valhalla
+	else
+		log "ERROR: could not mount the /etc overlay"
+		return 1
+	fi
+}
+
+set_root_password()
+{
+	log "Setting root password"
+	printf '%s\n%s\n' "$SSH_ROOT_PASS" "$SSH_ROOT_PASS" | passwd root >> "$LOGFILE" 2>&1 ||
+		log "ERROR: passwd failed"
+}
+
+start_ssh()
+{
+	_db=$TOOLS/dropbear/dropbearmulti
+	if [ ! -f "$_db" ]; then
+		log "SSH server not found: $_db"
+		return 1
+	fi
+	if pidof dropbear > /dev/null 2>&1 || pidof dropbearmulti > /dev/null 2>&1; then
+		log "SSH server already running"
+		return 0
+	fi
+
+	mkdir -p /etc/dropbear /var/run
+
+	## Keep one host key per camera on the SD card so clients do not get
+	## "host key changed" warnings after every reboot.
+	_key=dropbear_ecdsa_host_key
+	if [ -s "$TOOLS/dropbear/$_key" ]; then
+		cp "$TOOLS/dropbear/$_key" "/etc/dropbear/$_key"
+	else
+		log "Generating SSH host key"
+		run "$_db" dropbearkey -t ecdsa -f "/etc/dropbear/$_key" &&
+			cp "/etc/dropbear/$_key" "$TOOLS/dropbear/$_key"
+	fi
+	chmod 600 "/etc/dropbear/$_key" 2>/dev/null
+
+	for _applet in scp dbclient dropbearkey; do
+		ln -sf "$_db" "/etc/dropbear/$_applet"
+	done
+
+	log "Starting SSH server on port 22"
+	## -R creates any other missing host key type on demand.
+	run "$_db" dropbear -R -p 22 -P /var/run/dropbear.pid || log "ERROR: dropbear failed to start"
+
+	## The bundled dropbear has the SFTP server path compiled in.
+	if [ ! -f /mnt/media/mmcblk0p1/tools/sftp-server ]; then
+		log "WARNING: /mnt/media/mmcblk0p1/tools/sftp-server not found, SFTP will not work"
+	fi
+}
+
+set_english_voice()
+{
+	_dir=/mnt/data/sound
+	if [ ! -d "$_dir/en" ]; then
+		log "English voice files not found in $_dir/en"
+		return 0
+	fi
+	case "$(ls -l "$_dir/booting" 2>/dev/null)" in
+	*en/booting*)
+		log "English voice already installed"
+		return 0
+		;;
+	esac
+	log "Switching voice prompts to English"
+	for _f in "$_dir"/en/*; do
+		[ -f "$_f" ] || continue
+		ln -sf "$_f" "$_dir/$(basename "$_f")"
+	done
+	sync
+}
+
+setup_ota()
+{
+	if enabled "$DISABLED_OTA"; then
+		log "Blocking firmware (OTA) updates"
+		stub_file /mnt/data/miio_ota/pre-ota.sh "exit 1"
+		return 0
+	fi
+
+	## Hook into the OTA process so the hack survives a firmware update:
+	## post-ota.sh runs inject.sh, which writes the patched wifi_start.sh
+	## back into the new data partition. Only write flash when it changed.
+	if [ -d /mnt/data/miio_ota ] && ! cmp -s "$TOOLS/post-ota.sh" /mnt/data/miio_ota/post-ota.sh; then
+		log "Installing OTA persistence hook"
+		run cp "$TOOLS/post-ota.sh" /mnt/data/miio_ota/post-ota.sh
+		sync
+	fi
+	cp "$TOOLS/inject.sh" /tmp/inject.sh
+}
+
+## Join the Wi-Fi network from midgard.ini instead of the one stored by
+## the Mi Home app (nvram). Same steps as the stock wifi_start.sh.
+connect_wifi_override()
+{
+	[ -n "$WIFI_SSID" ] || return 0
+	## wifi_start.sh reads midgard.ini itself when it called us.
+	[ "$VALHALLA_FROM_WIFI" = "1" ] && return 0
+
+	log "Connecting to Wi-Fi '$WIFI_SSID' (from midgard.ini)"
+	_conf=/tmp/wpa_supplicant.conf
+	{
+		echo "ctrl_interface=/var/run/wpa_supplicant"
+		echo "update_config=1"
+		echo "network={"
+		echo "	ssid=\"$WIFI_SSID\""
+		if [ "$WIFI_KEY_MGMT" = "NONE" ] || [ -z "$WIFI_PASSWD" ]; then
+			echo "	key_mgmt=NONE"
+		else
+			echo "	psk=\"$WIFI_PASSWD\""
+			echo "	key_mgmt=WPA-PSK"
+			echo "	proto=WPA WPA2"
+		fi
+		echo "	scan_ssid=1"
+		echo "}"
+	} > "$_conf"
+	killall udhcpc wpa_supplicant hostapd udhcpd wpa_cli > /dev/null 2>&1
+	ifconfig uap0 down 2>/dev/null
+	ifconfig mlan0 up
+	iwconfig mlan0 mode Managed 2>/dev/null
+	mkdir -p /var/run/wpa_supplicant
+	run wpa_supplicant -Dnl80211 -imlan0 -c "$_conf" -B
+	[ -x /mnt/data/ot_wifi_tool/wpa_event.sh ] &&
+		wpa_cli -i mlan0 -B -a /mnt/data/ot_wifi_tool/wpa_event.sh
+	run udhcpc -i mlan0 -S -b
+}
+
+restart_wifi()
+{
+	## Factory-test mode brings Wi-Fi up as an access point. Switch back to
+	## the normal mode (0) and restart Wi-Fi, unless wifi_start.sh called us
+	## (it starts Wi-Fi itself right after).
+	echo 0 > /tmp/ft_mode
+	if [ "$VALHALLA_FROM_WIFI" = "1" ]; then
+		return 0
+	fi
+	if [ -x /etc/init.d/S41wifi ]; then
+		log "Restarting Wi-Fi"
+		run /etc/init.d/S41wifi restart
+	fi
+}
+
+init_gm_driver()
+{
+	## Firmware 0099 does not initialise the video driver in factory mode.
+	case "$(grep XIAOMI_VERSION /etc/os-release 2>/dev/null)" in
+	*0099*)
+		log "Initialising GM video driver (firmware 0099)"
+		run sh /gm/config/vg_boot.sh /gm/config
+		;;
+	esac
+}
+
+setup_cloud()
+{
+	if enabled "$CLOUD_DISABLED"; then
+		log "Disabling Xiaomi cloud"
+		for _s in S59miio_agent S60miio_avstreamer S93ble S93miio_client S94miio_bt \
+			S94miot_qrcode S95miio_ota; do
+			if [ -f "/etc/init.d/$_s" ]; then
+				printf '#!/bin/sh\nexit 0\n' > "/etc/init.d/$_s"
+			fi
 		done
+		for _b in /mnt/data/miio_av/miio_avstreamer /mnt/data/ot_wifi_tool/miio_client \
+			/mnt/data/miio/miio_agent /mnt/data/miio_ota/miio_ota; do
+			stub_file "$_b" "exit 0"
+		done
+		killall miio_avstreamer miio_client miio_agent miio_ota > /dev/null 2>&1
+	elif enabled "$CLOUD_STREAMING_DISABLED"; then
+		log "Disabling Xiaomi cloud streaming"
+		stub_file /mnt/data/miio_av/miio_avstreamer "exit 0"
+		killall miio_avstreamer > /dev/null 2>&1
 	fi
-	
-			
-	echo -e "...Adding Protection to Change of Keys..."  >> $sd_mountdir/$LOGFILE 2>&1
-	#cat /mnt/data/miio_ota/post-ota.sh >> $sd_mountdir/$LOGFILE 2>&1
-	
-	if [ $DISABLED_OTA -eq 1 ];then
-		cp -r /mnt/data/miio_ota/pre-ota.sh /tmp/pre-ota.sh   >> $sd_mountdir/$LOGFILE		
-		mount --bind /tmp/pre-ota.sh /mnt/data/miio_ota/pre-ota.sh >> $sd_mountdir/$LOGFILE	
-		cat << EOF > /tmp/pre-ota.sh
-#!/bin/sh
-exit 1
+}
 
-EOF
+setup_rtsp()
+{
+	enabled "$RTSP_ENABLED" || return 0
+	log "Enabling RTSP: rtsp://<camera-ip>/live/ch00_0"
+	echo "...Enabling RTSP..." > /dev/kmsg 2>/dev/null
+
+	## The launcher runs from /tmp so it does not keep the SD card busy.
+	cp "$TOOLS/rtsp_start.sh" /tmp/rtsp_start.sh
+	chmod 755 /tmp/rtsp_start.sh
+	echo "$CONFIG_LINE" > /tmp/rtsp.args
+	if enabled "$RTSP_LOG"; then
+		echo "$LOGDIR/rtsp.log" > /tmp/rtsp.logfile
+	else
+		echo /dev/null > /tmp/rtsp.logfile
 	fi
-	
-	#cp $sd_mountdir/tools/pre-ota.sh /mnt/data/miio_ota/pre-ota.sh  >> $sd_mountdir/$LOGFILE 2>&1		
-	cp $sd_mountdir/tools/post-ota.sh /mnt/data/miio_ota/post-ota.sh  >> $sd_mountdir/$LOGFILE 2>&1
-	cp $sd_mountdir/tools/inject.sh /tmp/inject.sh  >> $sd_mountdir/$LOGFILE 2>&1
-	
-	
-	#cp /mnt/data/miio_ota/miio_ota /tmp/miio_ota    >> $sd_mountdir/$LOGFILE	
-	#mount --bind /tmp/miio_ota /mnt/data/miio_ota/miio_ota >> $sd_mountdir/$LOGFILE	
-	
-	#cp /mnt/data/ot_wifi_tool/miio_recv_line /tmp/miio_recv_line
-	#mount --bind /tmp/miio_recv_line /mnt/data/ot_wifi_tool/miio_recv_line >> $sd_mountdir/$LOGFILE	
-	
-	#cp /mnt/data/ot_wifi_tool/miio_client /tmp/miio_client    >> $sd_mountdir/$LOGFILE	
-	#mount --bind /tmp/miio_client /mnt/data/ot_wifi_tool/miio_client >> $sd_mountdir/$LOGFILE	
-	
-	#cp /mnt/data/ot_wifi_tool/miio_client_helper_nomqtt.sh /tmp/miio_client_helper_nomqtt.sh    >> $sd_mountdir/$LOGFILE	
-	#mount --bind /tmp/miio_client_helper_nomqtt.sh /mnt/data/ot_wifi_tool/miio_client_helper_nomqtt.sh >> $sd_mountdir/$LOGFILE
-	
-		
-else
-	echo -e "\nSSH Server not found $sd_mountdir/tools/dropbear/dropbear"  >> $sd_mountdir/$LOGFILE 2>&1
-fi
 
-hostname Valhalla 
-
-## in Mode 3, the wifi is configured in AP. Restart Wifi in default mode (0).
-echo 0 > /tmp/ft_mode
-/etc/init.d/S41wifi restart
-
-
-
-## Simulate S50gm standard flow (for now)
-VERSION_FIRMWARE=`cat $VERSION | grep XIAOMI_VERSION`
-if [ -z "${VERSION_FIRMWARE##*0099*}" ];then
-	echo -e "...Init GM Driver for 0099 version..."  >> $sd_mountdir/$LOGFILE 2>&1
-	CONFIG_PARTITION=/gm/config
-	echo -e "vg boot"
-	sh ${CONFIG_PARTITION}/vg_boot.sh ${CONFIG_PARTITION}
-fi
-
-if [ $CLOUD_DISABLED -eq 1 ];then
-	echo -e "...Disabling Cloud...(TODO)"  >> $sd_mountdir/$LOGFILE 2>&1
-	# echo "" > /etc/init.d/S59miio_agent
-	# echo "" > /etc/init.d/S60miio_avstreamer
-	# echo "" > /etc/init.d/S93ble
-	#mount --bind /tmp/miio_avstreamer /mnt/data/miio_av/miio_avstreamer
-	#echo " echo \"...Disabling Cloud...\" " > /tmp/miio_client
-	#mount --bind /tmp/miio_client /mnt/data/ot_wifi_tool/miio_client
-	# echo "" > /etc/init.d/S93miio_client
-	# /etc/init.d/S51cron stop  >> $sd_mountdir/$LOGFILE 2>&1
-	# echo "" > /etc/init.d/S94miio_bt
-	# echo "" > /etc/init.d/S94miot_qrcode
-	# echo "" > /etc/init.d/S95miio_ota
-elif [ $CLOUD_STREAMING_DISABLED -eq 1 ];then
-	echo -e "...Disabling Cloud Streaming..."  >> $sd_mountdir/$LOGFILE 2>&1
-	echo " echo \"...Disabling Cloud Streaming...\" " > /tmp/miio_avstreamer		 
-	mount --bind /tmp/miio_avstreamer /mnt/data/miio_av/miio_avstreamer		 
-fi
-
-if [ $RTSP_ENABLED -eq 1 ];then
-	echo -e "...Enabling RTSP..." >> $sd_mountdir/$LOGFILE 2>&1
-	echo -e "...Enabling RTSP..." > /dev/kmsg
-cat <<EOF > /etc/init.d/S99zerlot
+	## Started both from the end of the boot sequence and right away; the
+	## launcher ignores a second start.
+	if [ -d /etc/init.d ] && [ -f /etc/.valhalla ]; then
+		cat << 'EOF' > /etc/init.d/S99zerlot
 #!/bin/sh
-#
-# end
-#
-
-case "\$1" in
-  start)
-	$sd_mountdir/tools/rtsp_basic $CONFIG_LINE & > $sd_mountdir/${LOGFILE}_RTSP.log 2>&1	
-	
-	echo "init script all done (TOOLS)" > /dev/kmsg
-    ;;
+case "$1" in
+  start) /tmp/rtsp_start.sh start ;;
+  stop) /tmp/rtsp_start.sh stop ;;
 esac
-
-exit $?
+exit 0
 EOF
+		chmod 755 /etc/init.d/S99zerlot
+	fi
+	/tmp/rtsp_start.sh start
+}
 
-fi
+start_http()
+{
+	enabled "$HTTP_ENABLED" || return 0
+	if pidof lighttpd > /dev/null 2>&1; then
+		return 0
+	fi
+	log "Starting web server on port 8080"
+	## Basic auth for the web interface, same credentials as SSH.
+	echo "root:$SSH_ROOT_PASS" > /tmp/lighttpd.user
+	chmod 600 /tmp/lighttpd.user
+	mkdir -p /var/run
+	run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd.conf" || log "ERROR: lighttpd failed to start"
+}
 
-if [ $HTTP_ENABLED -eq 1 ];then
-	echo -e "Web Server (8080)" >> $sd_mountdir/$LOGFILE 2>&1
-	$sd_mountdir/tools/bin/lighttpd -f $sd_mountdir/tools/etc/lighttpd.conf >> $sd_mountdir/$LOGFILE 2>&1
-fi
+start_samba()
+{
+	enabled "$SAMBA_ENABLED" || return 0
+	if pidof smbd > /dev/null 2>&1; then
+		return 0
+	fi
+	log "Starting Samba"
+	mkdir -p "$TOOLS/tmp/samba" /var/run
+	printf '%s\n%s\n' "$SSH_ROOT_PASS" "$SSH_ROOT_PASS" | "$TOOLS/bin/smbpasswd" -a -s root >> "$LOGFILE" 2>&1
+	run "$TOOLS/bin/smbd" -D || log "ERROR: smbd failed to start"
+}
 
-if [ $SAMBA_ENABLED -eq 1 ];then
-	echo -e "Samba setup..." >> $sd_mountdir/$LOGFILE 2>&1
-	(echo $SSH_ROOT_PASS; echo $SSH_ROOT_PASS) | $sd_mountdir/tools/bin/smbpasswd -a -s root >> $sd_mountdir/$LOGFILE 2>&1
-	$sd_mountdir/tools/bin/smbd -D
-fi
+blink_leds()
+{
+	_led=/mnt/data/miot/ledctl
+	[ -x "$_led" ] || return 0
+	$_led 0 50 2 300 300 2
+	$_led 1 50 2 400 200 2
+	sleep 5
+	$_led 0 1 1 100 200 2
+	$_led 1 1 1 100 200 2
+}
 
-echo -e "\nScript Ends. Ok" >> $sd_mountdir/$LOGFILE 2>&1
+## --- main ------------------------------------------------------------
 
+valhalla_main()
+{
+	if ! mkdir /tmp/valhalla.lock 2>/dev/null; then
+		echo "valhalla.sh already ran on this boot, skipping"
+		return 0
+	fi
+	mkdir -p "$LOGDIR"
 
-## Valhalla!!
-/mnt/data/miot/ledctl 0 50 2 300 300 2
-/mnt/data/miot/ledctl 1 50 2 400 200 2
-sleep 5
-/mnt/data/miot/ledctl 0 1 1 100 200 2
-/mnt/data/miot/ledctl 1 1 1 100 200 2
+	log "Valhalla script v$SCRIPT_VERSION starting"
+	load_config
+	log_versions
+
+	## Factory-test boot hook: force mode 4 while we set things up.
+	echo 4 > /tmp/ft_mode
+
+	setup_etc_overlay && set_root_password
+	start_ssh
+	enabled "$ENGLISH_VOICE" && set_english_voice
+	setup_ota
+	hostname "$CAM_HOSTNAME"
+	restart_wifi
+	connect_wifi_override
+	init_gm_driver
+	setup_cloud
+	setup_rtsp
+	start_http
+	start_samba
+
+	log "Valhalla script finished OK"
+	blink_leds
+}
+
+valhalla_main "$@"

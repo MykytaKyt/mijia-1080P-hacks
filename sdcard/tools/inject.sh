@@ -1,122 +1,112 @@
 #!/bin/sh
- 
+## inject.sh - called by post-ota.sh after a Xiaomi firmware (OTA) update.
+##
+## The update replaces the data partition (/dev/mtdblock3) and with it the
+## patched wifi_start.sh that starts this hack. This script frees the
+## partition, mounts it read-write and writes the patched wifi_start.sh
+## back, so the hack keeps working after the update.
+##
+## During the update only the copies of busybox and the loader in /tmp are
+## safe to use, hence the $BB prefix.
+
+BB="/tmp/ld-uClibc.so.0 /tmp/busybox"
 sd_mountdir=/tmp/sd
-LOGFILE="log-otaValhalla.log"
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "Injector"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-
-/tmp/ld-uClibc.so.0 /tmp/busybox sync
-
-/tmp/ld-uClibc.so.0 /tmp/busybox mkdir /tmp/Key
 pathDest=/tmp/Key
-flagUnmount=0
+SRC=$sd_mountdir/tools/wifi_start.sh
+DST=$pathDest/ot_wifi_tool/wifi_start.sh
 
-#/tmp/ld-uClibc.so.0 /tmp/busybox usleep 1000000
+log()
+{
+	$BB echo -e "$*" | $BB logger -t miio_ota
+}
 
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n /proc/mtd"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox cat /proc/mtd  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
+## Run a command and send its output to the log; keeps the exit code.
+run()
+{
+	_out=$("$@" 2>&1)
+	_rc=$?
+	[ -n "$_out" ] && log "$_out"
+	return $_rc
+}
 
-psRTSP_Server=/tmp/ld-uClibc.so.0 /tmp/busybox ps -o pid,args -C bash | /tmp/ld-uClibc.so.0 /tmp/busybox awk '/rtsp_basic/ { print $1 }'
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n psRTSP_Server: $psRTSP_Server"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-if [ ! -z "$psRTSP_Server" && $psRTSP_Server -gt 1 ];then
-	/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n Killing psRTSP_Server: $psRTSP_Server"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-	/tmp/ld-uClibc.so.0 /tmp/busybox kill -9 $psRTSP_Server | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota 
+log "Injector start"
+log "----------------------------------------------------"
+$BB sync
+$BB mkdir -p $pathDest
+
+log "/proc/mtd:"
+run $BB cat /proc/mtd
+
+## Stop the RTSP server: it runs from the SD card and keeps it busy.
+log "Stopping RTSP server"
+$BB touch /tmp/rtsp.stop
+if [ -f /var/run/rtsp_watchdog.pid ]; then
+	$BB kill "$($BB cat /var/run/rtsp_watchdog.pid)" 2>/dev/null
 fi
+$BB killall -9 rtsp_basic 2>/dev/null
 
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n mount"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox mount |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
+log "Mounts:"
+run $BB mount
 
 cd /
 
-## Clean Process underr /mnt/data/
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\nAll process\n"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-listProcessPID=`/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox grep /mnt/data | /tmp/ld-uClibc.so.0 /tmp/busybox awk '{print $1}'`
-#listProcess=`/tmp/ld-uClibc.so.0 /tmp/busybox ps`
-#for process in $listProcess;do
-#	tmp/ld-uClibc.so.0 /tmp/busybox echo -e "process PID: $process\n"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-#done
-
-/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox awk '{print $1}' | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "ps /mnt/data"  | /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  |  /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox grep /mnt/data | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n#KILL#\n" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-
-for process in $listProcessPID;do
-	/tmp/ld-uClibc.so.0 /tmp/busybox usleep 5000000
-	/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "Kill Process PID: [$process]\n"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-    /tmp/ld-uClibc.so.0 /tmp/busybox kill -9 $process 
+## Stop every process running from the data partition so it can be unmounted.
+log "Processes on /mnt/data:"
+run $BB sh -c "$BB ps | $BB grep /mnt/data | $BB grep -v grep"
+listProcessPID=$($BB ps | $BB grep /mnt/data | $BB grep -v grep | $BB awk '{print $1}')
+for process in $listProcessPID; do
+	log "Killing PID $process"
+	$BB kill -9 "$process" 2>/dev/null
+	$BB usleep 1000000
 done
+$BB usleep 5000000
+log "Processes on /mnt/data after kill:"
+run $BB sh -c "$BB ps | $BB grep /mnt/data | $BB grep -v grep"
 
-#/tmp/ld-uClibc.so.0 /tmp/busybox kill -9 $(/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox grep '/mnt/data'  | /tmp/ld-uClibc.so.0 /tmp/busybox awk '{print $1}') | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox usleep 5000000
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\nps /mnt/data after kill\n" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox ps | /tmp/ld-uClibc.so.0 /tmp/busybox grep /mnt/data | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n#@@#\n" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
+$BB sync
+$BB usleep 2000000
 
-/tmp/ld-uClibc.so.0 /tmp/busybox sync | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-/tmp/ld-uClibc.so.0 /tmp/busybox usleep 5000000
-
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n umount /dev/mtdblock3"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox umount /dev/mtdblock3 | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-if [ $? -ne 0 ];then
-	/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "umount /dev/mtdblock3  FAILED" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-	return 0
-fi
-	
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "\n mount $pathDest" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox mount -o ro -t jffs2 /dev/mtdblock3 $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox usleep 5000000
-/tmp/ld-uClibc.so.0 /tmp/busybox umount $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox mount -o rw -t jffs2 /dev/mtdblock3 $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-if [ $? -ne 0 ];then
-	/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "mount /dev/mtdblock3  FAILED" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-	return
+log "Unmounting /dev/mtdblock3"
+if ! run $BB umount /dev/mtdblock3; then
+	log "umount /dev/mtdblock3 FAILED"
+	exit 0
 fi
 
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "mount" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "----------------------------------------------------"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-/tmp/ld-uClibc.so.0 /tmp/busybox mount | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
+log "Mounting /dev/mtdblock3 on $pathDest"
+## A read-only mount first lets jffs2 finish scanning the new partition.
+run $BB mount -o ro -t jffs2 /dev/mtdblock3 $pathDest
+$BB usleep 5000000
+run $BB umount $pathDest
+if ! run $BB mount -o rw -t jffs2 /dev/mtdblock3 $pathDest; then
+	log "mount /dev/mtdblock3 FAILED"
+	exit 0
+fi
 
-
-if [ -d $pathDest/ft ];then	
-	
-	for tries in 1 2 3 4 5 6 7 8 9 10;do
-		
-		/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "[$tries]----------------------------------------------------"   | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-				
-		/tmp/ld-uClibc.so.0 /tmp/busybox cp $sd_mountdir/tools/wifi_start.sh $pathDest/ot_wifi_tool/wifi_start.sh | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-		/tmp/ld-uClibc.so.0 /tmp/busybox chmod 777 $pathDest/ot_wifi_tool/wifi_start.sh | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-		/tmp/ld-uClibc.so.0 /tmp/busybox sync | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-		/tmp/ld-uClibc.so.0 /tmp/busybox umount $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-		/tmp/ld-uClibc.so.0 /tmp/busybox usleep 5000000
-		/tmp/ld-uClibc.so.0 /tmp/busybox mount -o rw -t jffs2 /dev/mtdblock3 $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-		/tmp/ld-uClibc.so.0 /tmp/busybox cmp $sd_mountdir/tools/wifi_start.sh $pathDest/ot_wifi_tool/wifi_start.sh
-		if [ $? -eq 0 ];then
-			/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "wifi_start.sh seems to match" | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-		#	break
+if [ -d $pathDest/ot_wifi_tool ]; then
+	for tries in 1 2 3 4 5 6 7 8 9 10; do
+		log "[$tries] writing $DST"
+		run $BB cp $SRC $DST
+		run $BB chmod 755 $DST
+		$BB sync
+		## Remount to make sure the data really reached the flash.
+		run $BB umount $pathDest
+		$BB usleep 2000000
+		run $BB mount -o rw -t jffs2 /dev/mtdblock3 $pathDest
+		if $BB cmp -s $SRC $DST; then
+			log "wifi_start.sh written and verified"
+			break
 		fi
+		log "wifi_start.sh does not match, retrying"
 	done
-			
 else
-	/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "Error $pathDest/ft doesnt exist"  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
+	log "Error: $pathDest/ot_wifi_tool does not exist"
 fi
 
-#/tmp/ld-uClibc.so.0 /tmp/busybox sync | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-/tmp/ld-uClibc.so.0 /tmp/busybox umount $pathDest  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
+$BB sync
+run $BB umount $pathDest
+$BB sync
+$BB umount /mnt/media/mmcblk0p1 2>/dev/null
+$BB umount /mnt/media/mmcblk0 2>/dev/null
 
-/tmp/ld-uClibc.so.0 /tmp/busybox sync | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-/tmp/ld-uClibc.so.0 /tmp/busybox umount /mnt/media/mmcblk0p1 | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-/tmp/ld-uClibc.so.0 /tmp/busybox umount /mnt/media/mmcblk0 | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota
-
-/tmp/ld-uClibc.so.0 /tmp/busybox echo -e "Inject END."  | /tmp/ld-uClibc.so.0 /tmp/busybox logger -t miio_ota	
-
-return 0
+log "Injector end"
+exit 0

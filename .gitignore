@@ -1,0 +1,5 @@
+# Created on the SD card by the camera
+sdcard/logs/
+sdcard/log-*.log
+# Per-camera SSH host key, generated on first boot
+sdcard/tools/dropbear/dropbear_*_host_key

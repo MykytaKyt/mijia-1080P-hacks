@@ -82,7 +82,21 @@ get_ssid_passwd()
 {
     ssid=`/usr/sbin/nvram get miio_ssid`
     key_mgmt=`/usr/sbin/nvram get miio_key_mgmt`
-    if [ $key_mgmt == "NONE" ]; then
+
+    # Wi-Fi settings from midgard.ini on the SD card take precedence
+    ini=/tmp/sd/midgard.ini
+    if [ -f $ini ]; then
+	ini_ssid=`grep '^miio_ssid=' $ini | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'`
+	if [ -n "$ini_ssid" ]; then
+	    ssid=$ini_ssid
+	    key_mgmt=`grep '^miio_key_mgmt=' $ini | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'`
+	    passwd=`grep '^miio_passwd=' $ini | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'`
+	    [ "$key_mgmt" = "NONE" ] && passwd=""
+	    return
+	fi
+    fi
+
+    if [ "$key_mgmt" = "NONE" ]; then
 	passwd=""
     else
 	passwd=`/usr/sbin/nvram get miio_passwd`
@@ -95,6 +109,10 @@ start()
     if [ x"$wifi_ready" = x ]; then
 	wifi_ready="no"
     else
+	wifi_ready="yes"
+    fi
+
+    if [ -n "`grep '^miio_ssid=.' /tmp/sd/midgard.ini 2>/dev/null`" ]; then
 	wifi_ready="yes"
     fi
 
@@ -114,28 +132,38 @@ start()
     fi
 }
 
+# Mount the SD card and run the hack (valhalla.sh) once per boot.
 start_valhalla()
-{		
-	## Mounting point
-	mmc_device=""
-	if [ -b /dev/mmcblk0p1 ];then
-		mmc_device=/dev/mmcblk0p1
-	elif [ -b /dev/mmcblk0 ];then
-		mmc_device=/dev/mmcblk0
-	fi
+{
 	sd_mountdir=/tmp/sd
-	mkdir /tmp/sd
-	mount -t vfat $mmc_device $sd_mountdir
-	
-	
-	NOW=$(date +"%Y%m%d%H%M")
-	LOGFILE="log-Wifi-$NOW.log"	
-	echo -e "start_valhalla WIFI" | /tmp/busybox logger -t miio_ota
-	echo -e "Wifi_start Valhalla.sh" >> $sd_mountdir/$LOGFILE
 	[ -f /tmp/valhalla.pid ] && return
 	echo 1 > /tmp/valhalla.pid
-		
-	$sd_mountdir/valhalla.sh
+
+	if ! grep -q " $sd_mountdir " /proc/mounts; then
+		mmc_device=""
+		if [ -b /dev/mmcblk0p1 ]; then
+			mmc_device=/dev/mmcblk0p1
+		elif [ -b /dev/mmcblk0 ]; then
+			mmc_device=/dev/mmcblk0
+		fi
+		if [ -z "$mmc_device" ]; then
+			echo "start_valhalla: no SD card found" | logger -t valhalla
+			return
+		fi
+		mkdir -p $sd_mountdir
+		if ! mount -t vfat $mmc_device $sd_mountdir; then
+			echo "start_valhalla: cannot mount $mmc_device" | logger -t valhalla
+			return
+		fi
+	fi
+
+	if [ ! -f $sd_mountdir/valhalla.sh ]; then
+		echo "start_valhalla: $sd_mountdir/valhalla.sh not found" | logger -t valhalla
+		return
+	fi
+
+	echo "start_valhalla: running valhalla.sh" | logger -t valhalla
+	VALHALLA_FROM_WIFI=1 sh $sd_mountdir/valhalla.sh
 }
 
 start_valhalla
