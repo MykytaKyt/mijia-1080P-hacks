@@ -163,10 +163,26 @@ EOF
 	run udhcpd /tmp/valhalla_udhcpd.conf
 
 	echo "$_ssid" > /tmp/setup_ap.ssid
-	if [ ! -f /var/run/lighttpd-setup.pid ] || ! kill -0 "$(cat /var/run/lighttpd-setup.pid)" 2>/dev/null; then
-		run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd-setup.conf" ||
-			log "ERROR: setup web server failed to start"
+	setup_web_start
+}
+
+## True while an access point is up on uap0: ours, or the firmware's own
+## Mi Home pairing network ("...-camera-..._mibtXXXX"), both on 192.168.14.1.
+ap_is_up()
+{
+	ifconfig uap0 2>/dev/null | grep -q "inet addr:$AP_IP"
+}
+
+## Serve the Wi-Fi setup page on http://192.168.14.1 (port 80).
+setup_web_start()
+{
+	if [ -f /var/run/lighttpd-setup.pid ] && kill -0 "$(cat /var/run/lighttpd-setup.pid)" 2>/dev/null; then
+		return 0
 	fi
+	[ -s /tmp/wifi_scan.txt ] || wifi_scan
+	log "Starting Wi-Fi setup page on http://$AP_IP"
+	run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd-setup.conf" ||
+		log "ERROR: setup web server failed to start"
 }
 
 setup_ap_stop()

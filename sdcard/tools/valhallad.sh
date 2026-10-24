@@ -21,6 +21,7 @@ TICK=5
 WIFI_SETUP_AP=$(cfg WIFI_SETUP_AP 1)
 WIFI_SETUP_TIMEOUT=$(cfg WIFI_SETUP_TIMEOUT 120)
 SETUP_RETRY=$(cfg SETUP_RETRY 600)
+NO_WIFI_DELAY=20
 NTP_ENABLED=$(cfg NTP_ENABLED 1)
 NTP_SERVER=$(cfg NTP_SERVER pool.ntp.org)
 NTP_INTERVAL=21600
@@ -38,6 +39,7 @@ now()
 
 wifi_state=boot
 wifi_since=$(now)
+ap_started=$wifi_since
 
 wifi_tick()
 {
@@ -49,14 +51,29 @@ wifi_tick()
 			wifi_state=ok
 		elif ! enabled "$WIFI_SETUP_AP"; then
 			wifi_state=ok
+		elif ! wifi_credentials && [ $((_t - wifi_since)) -ge "$NO_WIFI_DELAY" ]; then
+			## Nothing to connect to: no need to wait for the full timeout.
+			log "No Wi-Fi network configured"
+			setup_ap_start
+			wifi_state=ap
+			wifi_since=$_t
 		elif [ $((_t - wifi_since)) -ge "$WIFI_SETUP_TIMEOUT" ]; then
 			log "No Wi-Fi connection after ${WIFI_SETUP_TIMEOUT}s"
 			setup_ap_start
 			wifi_state=ap
 			wifi_since=$_t
+		elif ap_is_up; then
+			## The firmware's pairing network is up: offer the page there too.
+			setup_web_start
 		fi
 		;;
 	ap)
+		## The firmware may restart Wi-Fi and kill our access point.
+		if ! pidof hostapd > /dev/null 2>&1 && [ $((_t - ap_started)) -ge 30 ]; then
+			log "Setup access point is gone, starting it again"
+			setup_ap_start
+			ap_started=$_t
+		fi
 		if [ -f "$RECONNECT_FLAG" ] ||
 			{ [ $((_t - wifi_since)) -ge "$SETUP_RETRY" ] && wifi_credentials; }; then
 			rm -f "$RECONNECT_FLAG"
