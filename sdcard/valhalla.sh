@@ -10,7 +10,7 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.4"
+SCRIPT_VERSION="2.5"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools

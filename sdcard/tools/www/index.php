@@ -16,7 +16,7 @@ if (same_origin_post()) {
 			foreach ($fields as $key => $f) {
 				$v = isset($_POST[$key]) ? midgard_clean($_POST[$key]) : '';
 				if ($f[0] === 'bool') $v = ($v === '1') ? '1' : '0';
-				if ($f[0] === 'number' && $v !== '' && !ctype_digit($v)) {
+				if ($f[0] === 'number' && $v !== '' && !preg_match('/^[0-9]+$/', $v)) {
 					$err = $f[1] . ': enter a whole number.';
 				}
 				if ($f[0] === 'password' && $v === '') continue; // keep current
