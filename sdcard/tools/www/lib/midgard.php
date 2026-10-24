@@ -23,7 +23,7 @@ function midgard_schema()
 			'SETUP_AP_PASS' => array('text', 'Setup access point password', 'At least 8 characters. Empty: open access point.'),
 		),
 		'Video' => array(
-			'RTSP_ENABLED' => array('bool', 'RTSP stream', 'rtsp://<camera-ip>/live/ch00_0'),
+			'RTSP_ENABLED' => array('bool', 'RTSP stream', 'rtsp://<camera-ip>/live/ch00_0. For a clean picture also turn off the Xiaomi video service: it reads the same encoder channel, and the stream loses frames.'),
 			'CONFIG_LINE' => array('text', 'Encoder options', '-bBITRATE -fFPS -wWIDTH -hHEIGHT -mMODE (1 CBR, 2 VBR, 3/4 enhanced)'),
 			'RTSP_ALLOW' => array('text', 'Allow RTSP only from', 'Comma-separated IPs or networks, e.g. 192.168.1.0/24. Empty: everyone.'),
 			'RTSP_LOG' => array('bool', 'RTSP debug log', 'Writes logs/rtsp.log on the SD card.'),

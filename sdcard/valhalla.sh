@@ -268,6 +268,9 @@ setup_rtsp()
 {
 	enabled "$RTSP_ENABLED" || return 0
 	log "Enabling RTSP: rtsp://<camera-ip>/live/ch00_0"
+	if ! enabled "$CLOUD_STREAMING_DISABLED"; then
+		log "WARNING: miio_avstreamer shares the encoder with RTSP, the stream will be blocky; set CLOUD_STREAMING_DISABLED=1"
+	fi
 	echo "...Enabling RTSP..." > /dev/kmsg 2>/dev/null
 
 	## The launcher runs from /tmp so it does not keep the SD card busy.

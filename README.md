@@ -91,8 +91,13 @@ All services use the user **`root`** and the password from `SSH_ROOT_PASS`.
 * **SFTP / scp:** `sftp root@<camera-ip>`. OpenSSH 9+ `scp` works too, because it
   uses SFTP. SFTP only works when the camera mounts the card at
   `/mnt/media/mmcblk0p1`, the normal case.
-* **RTSP:** `rtsp://<camera-ip>/live/ch00_0`, for example in VLC or ffmpeg:
-  `ffplay rtsp://192.168.1.50/live/ch00_0`.
+* **RTSP:** `rtsp://<camera-ip>/live/ch00_0`. **Also set
+  `CLOUD_STREAMING_DISABLED=1`**: the firmware's `miio_avstreamer` reads the
+  same encoder channel as `rtsp_basic`, each frame goes to only one of them,
+  and the stream turns into smeared blocks. With it set, the camera no longer
+  records to the SD card itself; record with Frigate or another NVR instead.
+  Watch it in VLC or ffmpeg:
+  `ffplay -rtsp_transport tcp rtsp://192.168.1.50/live/ch00_0`.
   The stream starts about 15 seconds after the script runs.
   `CONFIG_LINE` sets bitrate (`-b`, kbps), frame rate (`-f`), size
   (`-w`/`-h`) and bitrate mode (`-m`: 1 CBR, 2 VBR, 3 enhanced CBR,
