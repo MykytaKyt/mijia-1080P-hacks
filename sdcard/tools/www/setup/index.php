@@ -26,6 +26,7 @@ if (same_origin_post()) {
 			'miio_key_mgmt' => $open ? 'NONE' : 'WPA',
 		);
 		if ($root !== '') $updates['SSH_ROOT_PASS'] = $root;
+		$updates['CLOUD_DISABLED'] = empty($_POST['nocloud']) ? '0' : '1';
 		if (midgard_write($updates)) {
 			if ($root !== '') apply_root_password($root);
 			touch('/tmp/wifi_reconnect');
@@ -74,6 +75,12 @@ $default_pass = (isset($values['SSH_ROOT_PASS']) ? $values['SSH_ROOT_PASS'] : ''
 		<label for="root">New camera password <?= $default_pass ? '(recommended)' : '(optional)' ?></label>
 		<input type="password" id="root" name="root" autocomplete="new-password">
 		<div class="hint">For SSH and the web interface, user <b>root</b>.<?= $default_pass ? ' The default password is still in use.' : '' ?></div>
+
+		<div class="row">
+			<input type="checkbox" id="nocloud" name="nocloud" value="1" <?= ($_SERVER['REQUEST_METHOD'] !== 'POST' || !empty($_POST['nocloud'])) ? 'checked' : '' ?>>
+			<div><label for="nocloud">Turn off the Xiaomi cloud</label>
+			<div class="hint">A camera set up here cannot be used with the Mi Home app. Takes effect after a reboot.</div></div>
+		</div>
 
 		<div class="actions"><button type="submit">Connect</button></div>
 	</form>

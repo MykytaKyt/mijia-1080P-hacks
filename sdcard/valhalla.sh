@@ -235,21 +235,30 @@ init_gm_driver()
 
 setup_cloud()
 {
+	## Runs during S50gm, before the cloud services start (S59..S99), so
+	## replacing their init scripts in the /etc overlay is enough. The stubs
+	## on the binaries stop restartd from bringing them back.
 	if enabled "$CLOUD_DISABLED"; then
-		log "Disabling Xiaomi cloud"
-		for _s in S59miio_agent S60miio_avstreamer S93ble S93miio_client S94miio_bt \
-			S94miot_qrcode S95miio_ota; do
+		log "Disabling Xiaomi cloud (Mi Home app, BLE pairing, OTA)"
+		for _s in S59miio_agent S90miot_qrcode S93ble S93miio_client S93miot_devicekit \
+			S94miio_bt S94miot_qrcode S95miio_ota S95miio_smb S99restartd; do
 			if [ -f "/etc/init.d/$_s" ]; then
 				printf '#!/bin/sh\nexit 0\n' > "/etc/init.d/$_s"
+				log "  disabled $_s"
 			fi
 		done
-		for _b in /mnt/data/miio_av/miio_avstreamer /mnt/data/ot_wifi_tool/miio_client \
-			/mnt/data/miio/miio_agent /mnt/data/miio_ota/miio_ota; do
+		for _b in /mnt/data/ot_wifi_tool/miio_client /mnt/data/miio_ota/miio_ota \
+			/mnt/data/miio/miio_agent; do
 			stub_file "$_b" "exit 0"
 		done
-		killall miio_avstreamer miio_client miio_agent miio_ota > /dev/null 2>&1
-	elif enabled "$CLOUD_STREAMING_DISABLED"; then
-		log "Disabling Xiaomi cloud streaming"
+		killall miio_client miio_bt miot_devicekit miot_qrcode miio_ota miio_smb restartd \
+			> /dev/null 2>&1
+	fi
+	## miio_avstreamer also records to the SD card and plays the voice
+	## prompts, so it only goes with CLOUD_STREAMING_DISABLED.
+	if enabled "$CLOUD_STREAMING_DISABLED"; then
+		log "Disabling Xiaomi video streaming (miio_avstreamer, also stops SD card recording)"
+		[ -f /etc/init.d/S60miio_avstreamer ] && printf '#!/bin/sh\nexit 0\n' > /etc/init.d/S60miio_avstreamer
 		stub_file /mnt/data/miio_av/miio_avstreamer "exit 0"
 		killall miio_avstreamer > /dev/null 2>&1
 	fi

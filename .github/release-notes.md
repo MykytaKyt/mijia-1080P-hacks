@@ -10,12 +10,12 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **Wi-Fi setup page also works on the camera's own pairing network** (`mijia-camera-…_mibtXXXX`). In v1.0.0 a phone on that network got "cannot open this page" at 192.168.14.1.
-- **Setup mode starts after ~20 seconds** when no Wi-Fi is configured at all (was 2 minutes). With a saved network that cannot be reached, the camera still waits `WIFI_SETUP_TIMEOUT` (120 s).
-- The setup access point starts again if the firmware stops it.
-- The boot log now shows whether the access point, DHCP server and setup page are running.
+- **`CLOUD_DISABLED` fixed for firmware 3.3.6**: it now turns off the real services of this firmware (`miio_client`, `miio_bt`, BLE, `miot_devicekit`, `miot_qrcode`, `miio_ota`, `miio_smb`, `restartd`). It no longer stops `miio_avstreamer`, the video service that records to the SD card. Stopping that is now only done by `CLOUD_STREAMING_DISABLED`.
+- **Clock sync without ntpd**: firmware without `ntpd` (3.3.6_0099) now gets the time from the `Date` header of a plain HTTP request. Before, the clock stayed at 1970.
+- **Setup page**: new checkbox *Turn off the Xiaomi cloud* (on by default), because a camera set up there cannot be used with Mi Home anyway.
+- From v1.0.1: the setup page also works on the camera's own pairing network, and setup mode starts after ~20 s when no Wi-Fi is configured.
 
-Tested on firmware **3.3.6_0099**: the hack starts, SSH and the settings page run, the setup access point comes up.
+Tested on firmware **3.3.6_0099**: setup through the access point, joining the home Wi-Fi and the settings page work.
 
 ## Since v1.0.0
 

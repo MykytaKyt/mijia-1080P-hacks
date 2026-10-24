@@ -117,15 +117,21 @@ settings.
 
 ### Cloud options
 
-* `CLOUD_STREAMING_DISABLED=1`: the Mi Home app still controls the camera,
-  but no video leaves your network.
-* `CLOUD_DISABLED=1`: stops all Xiaomi cloud services (miio client/agent,
-  BLE, OTA, video). The Mi Home app will not work. Use RTSP to watch.
+* `CLOUD_DISABLED=1`: turns off the Xiaomi cloud: the Mi Home connection
+  (`miio_client`), BLE pairing, OTA, `miot_devicekit`, `miot_qrcode` and
+  `restartd`. The Mi Home app will not work. The video service keeps running.
+  Recommended when the camera was set up with the Wi-Fi setup page, because
+  such a camera cannot be used with Mi Home anyway. The setup page has a
+  checkbox for it.
+* `CLOUD_STREAMING_DISABLED=1`: also stops `miio_avstreamer`, the firmware's
+  video service. No video leaves your network, but recording to the SD card
+  and the voice prompts stop too. RTSP keeps working.
 
 ### Time
 
 `NTP_ENABLED=1` syncs the clock with `NTP_SERVER` once the camera is online
-and every 6 hours, if the firmware's busybox has `ntpd`. `TIMEZONE` takes a
+and every 6 hours. Firmware without `ntpd` (e.g. 3.3.6_0099) gets the time
+from the `Date` header of a plain HTTP request instead. `TIMEZONE` takes a
 POSIX TZ string, for example `UTC0`, `CET-1CEST,M3.5.0,M10.5.0/3` (Central
 Europe), `EET-2EEST,M3.5.0/3,M10.5.0/4` (Kyiv), `MSK-3` (Moscow).
 

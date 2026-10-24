@@ -29,8 +29,8 @@ function midgard_schema()
 			'RTSP_LOG' => array('bool', 'RTSP debug log', 'Writes logs/rtsp.log on the SD card.'),
 		),
 		'Xiaomi cloud' => array(
-			'CLOUD_STREAMING_DISABLED' => array('bool', 'Block cloud video', 'The Mi Home app works, video stays in your network.'),
-			'CLOUD_DISABLED' => array('bool', 'Block the cloud completely', 'The Mi Home app stops working.'),
+			'CLOUD_DISABLED' => array('bool', 'Turn off the Xiaomi cloud', 'Stops the Mi Home app connection, BLE pairing, OTA and restartd. The video service (SD card recording) keeps running.'),
+			'CLOUD_STREAMING_DISABLED' => array('bool', 'Turn off the Xiaomi video service', 'Stops miio_avstreamer: no cloud video, but also no recording to the SD card and no voice prompts.'),
 			'DISABLED_OTA' => array('bool', 'Block firmware updates', ''),
 		),
 		'Services' => array(

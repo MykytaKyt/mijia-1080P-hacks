@@ -129,6 +129,27 @@ services_tick()
 
 ntp_last=0
 
+## Fallback when the firmware has no ntpd: take the time from the Date
+## header of a plain HTTP request (accurate to about a second).
+http_time_sync()
+{
+	_d=""
+	for _url in http://captive.apple.com/ http://connectivitycheck.gstatic.com/generate_204 \
+		http://www.msftconnecttest.com/connecttest.txt; do
+		_d=$(wget -S -O /dev/null -T 10 "$_url" 2>&1 | sed -n 's/^ *[Dd]ate: *//p' | head -n 1 | tr -d '\r')
+		[ -n "$_d" ] && break
+	done
+	[ -n "$_d" ] || return 1
+	## "Sat, 24 Oct 2026 15:04:05 GMT"
+	# shellcheck disable=SC2086 # split the date into words
+	set -- $_d
+	[ $# -ge 5 ] || return 1
+	_day=${2#0}
+	_mon=$(echo "JanFebMarAprMayJunJulAugSepOctNovDec" | awk -v m="$3" '{ print (index($0, m) + 2) / 3 }')
+	[ "$_mon" -ge 1 ] 2>/dev/null || return 1
+	date -u -s "$4-$(printf '%02d' "$_mon")-$(printf '%02d' "$_day") $5" > /dev/null 2>&1
+}
+
 ntp_tick()
 {
 	enabled "$NTP_ENABLED" || return 0
@@ -136,19 +157,14 @@ ntp_tick()
 	_t=$(now)
 	[ "$ntp_last" -eq 0 ] || [ $((_t - ntp_last)) -ge $NTP_INTERVAL ] || return 0
 	ntp_last=$_t
-	if command -v ntpd > /dev/null 2>&1; then
-		_ntp="ntpd"
-	elif busybox ntpd --help > /dev/null 2>&1; then
-		_ntp="busybox ntpd"
+	if command -v ntpd > /dev/null 2>&1 && ntpd -n -q -p "$NTP_SERVER" > /dev/null 2>&1; then
+		log "Time: clock set by NTP to $(date)"
+	elif busybox ntpd --help > /dev/null 2>&1 && busybox ntpd -n -q -p "$NTP_SERVER" > /dev/null 2>&1; then
+		log "Time: clock set by NTP to $(date)"
+	elif http_time_sync; then
+		log "Time: clock set from an HTTP server to $(date)"
 	else
-		log "NTP: ntpd not available on this firmware"
-		NTP_ENABLED=0
-		return 0
-	fi
-	if $_ntp -n -q -p "$NTP_SERVER" > /dev/null 2>&1; then
-		log "NTP: clock set to $(date)"
-	else
-		log "NTP: sync with $NTP_SERVER failed"
+		log "Time: sync failed, retrying in 5 minutes"
 		ntp_last=$((_t - NTP_INTERVAL + 300))
 	fi
 }
