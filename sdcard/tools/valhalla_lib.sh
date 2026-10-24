@@ -164,6 +164,10 @@ EOF
 
 	echo "$_ssid" > /tmp/setup_ap.ssid
 	setup_web_start
+
+	sleep 1
+	pidof hostapd > /dev/null 2>&1 || log "ERROR: hostapd is not running"
+	pidof udhcpd > /dev/null 2>&1 || log "ERROR: udhcpd is not running, phones will not get an address"
 }
 
 ## True while an access point is up on uap0: ours, or the firmware's own
@@ -181,8 +185,12 @@ setup_web_start()
 	fi
 	[ -s /tmp/wifi_scan.txt ] || wifi_scan
 	log "Starting Wi-Fi setup page on http://$AP_IP"
-	run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd-setup.conf" ||
-		log "ERROR: setup web server failed to start"
+	mkdir -p /var/run
+	if run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd-setup.conf"; then
+		log "Setup page is running"
+	else
+		log "ERROR: setup web server failed to start (see tools/tmp/lighttpd-setup.log)"
+	fi
 }
 
 setup_ap_stop()

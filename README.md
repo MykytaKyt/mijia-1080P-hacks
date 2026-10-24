@@ -52,21 +52,26 @@ Settings page (`http://<camera-ip>:8080`), light and dark mode:
 4. Put the card in the camera and power it on. When the hack has finished
    starting, both LEDs blink for about 5 seconds.
 5. If the camera has no Wi-Fi yet, it opens its own network after about
-   2 minutes, see [First Wi-Fi setup](#first-wi-fi-setup).
+   20 seconds, see [First Wi-Fi setup](#first-wi-fi-setup).
 6. Open `http://<camera-ip>:8080` (user `root`, password `qwerty123456`)
    and **set a new password** under *System*.
 7. Check `logs/boot-*.log` on the card if something does not work.
 
 ### First Wi-Fi setup
 
-1. Wait about 2 minutes after power-on (`WIFI_SETUP_TIMEOUT`).
-2. On your phone, connect to the Wi-Fi network **`Mijia-Setup-XXXX`**,
-   password **`mijia1080`** (`SETUP_AP_PASS`).
+1. Power the camera on and wait about 30 seconds.
+2. On your phone, connect to one of these Wi-Fi networks:
+   * **`Mijia-Setup-XXXX`**, password **`mijia1080`** (`SETUP_AP_PASS`), or
+   * the camera's own pairing network **`mijia-camera-…_mibtXXXX`** (open),
+     shown while the setup network is starting.
 3. Open **http://192.168.14.1** in the browser.
 4. Pick your network, enter its password (and a new camera password), and
    press *Connect*.
 5. The setup network disappears and the camera joins your Wi-Fi. If the
    password was wrong, the setup network comes back after about a minute.
+
+If the page does not open, try **http://192.168.14.1:8080** (the settings
+page, user `root`), and check `logs/boot-*.log` on the card.
 
 The camera also falls back to setup mode when the saved network is not
 reachable at boot, and tries the saved network again every 10 minutes
