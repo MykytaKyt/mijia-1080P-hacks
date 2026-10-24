@@ -10,10 +10,13 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **`CLOUD_DISABLED` fixed for firmware 3.3.6**: it now turns off the real services of this firmware (`miio_client`, `miio_bt`, BLE, `miot_devicekit`, `miot_qrcode`, `miio_ota`, `miio_smb`, `restartd`). It no longer stops `miio_avstreamer`, the video service that records to the SD card. Stopping that is now only done by `CLOUD_STREAMING_DISABLED`.
-- **Clock sync without ntpd**: firmware without `ntpd` (3.3.6_0099) now gets the time from the `Date` header of a plain HTTP request. Before, the clock stayed at 1970.
-- **Setup page**: new checkbox *Turn off the Xiaomi cloud* (on by default), because a camera set up there cannot be used with Mi Home anyway.
-- From v1.0.1: the setup page also works on the camera's own pairing network, and setup mode starts after ~20 s when no Wi-Fi is configured.
+- **Phones are no longer kicked off the camera's pairing network.** When the firmware's own network (`mijia-camera-…_mibtXXXX`) is up, the setup page runs there and the camera no longer replaces it with `Mijia-Setup` after 20 s. `Mijia-Setup` only starts when no network is up.
+- *Connect* on the setup page now works on the pairing network too (before, only on `Mijia-Setup`).
+- Script version 2.3 in the boot log, so you can tell which release is on the card.
+
+From v1.0.2: `CLOUD_DISABLED` fixed for firmware 3.3.6 (keeps the video service that records to the SD card), clock sync without `ntpd`, and a *Turn off the Xiaomi cloud* checkbox on the setup page.
+
+**Updating:** keep your own `midgard.ini`. The zip contains one with default settings, so copy everything except that file.
 
 Tested on firmware **3.3.6_0099**: setup through the access point, joining the home Wi-Fi and the settings page work.
 

@@ -60,10 +60,12 @@ Settings page (`http://<camera-ip>:8080`), light and dark mode:
 ### First Wi-Fi setup
 
 1. Power the camera on and wait about 30 seconds.
-2. On your phone, connect to one of these Wi-Fi networks:
-   * **`Mijia-Setup-XXXX`**, password **`mijia1080`** (`SETUP_AP_PASS`), or
-   * the camera's own pairing network **`mijia-camera-…_mibtXXXX`** (open),
-     shown while the setup network is starting.
+2. On your phone, connect to the camera's Wi-Fi network:
+   * its own pairing network **`mijia-camera-…_mibtXXXX`** (open), if the
+     firmware started it; the setup page works there and the camera leaves
+     that network alone while you use it, or
+   * **`Mijia-Setup-XXXX`**, password **`mijia1080`** (`SETUP_AP_PASS`),
+     which the camera starts when no other network is up.
 3. Open **http://192.168.14.1** in the browser.
 4. Pick your network, enter its password (and a new camera password), and
    press *Connect*.

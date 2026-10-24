@@ -41,6 +41,17 @@ wifi_state=boot
 wifi_since=$(now)
 ap_started=$wifi_since
 
+## The setup page saved a network: try it now.
+wifi_try_saved()
+{
+	rm -f "$RECONNECT_FLAG"
+	wifi_credentials || return 1
+	setup_ap_stop
+	wifi_connect
+	wifi_state=try
+	wifi_since=$(now)
+}
+
 wifi_tick()
 {
 	_t=$(now)
@@ -51,20 +62,25 @@ wifi_tick()
 			wifi_state=ok
 		elif ! enabled "$WIFI_SETUP_AP"; then
 			wifi_state=ok
+		elif [ -f "$RECONNECT_FLAG" ]; then
+			wifi_try_saved
+		elif ap_is_up; then
+			## The firmware's pairing network is up: serve the page there and
+			## leave it alone, so a phone already on it is not disconnected.
+			setup_web_start
 		elif ! wifi_credentials && [ $((_t - wifi_since)) -ge "$NO_WIFI_DELAY" ]; then
 			## Nothing to connect to: no need to wait for the full timeout.
 			log "No Wi-Fi network configured"
 			setup_ap_start
 			wifi_state=ap
 			wifi_since=$_t
+			ap_started=$_t
 		elif [ $((_t - wifi_since)) -ge "$WIFI_SETUP_TIMEOUT" ]; then
 			log "No Wi-Fi connection after ${WIFI_SETUP_TIMEOUT}s"
 			setup_ap_start
 			wifi_state=ap
 			wifi_since=$_t
-		elif ap_is_up; then
-			## The firmware's pairing network is up: offer the page there too.
-			setup_web_start
+			ap_started=$_t
 		fi
 		;;
 	ap)
@@ -74,17 +90,10 @@ wifi_tick()
 			setup_ap_start
 			ap_started=$_t
 		fi
-		if [ -f "$RECONNECT_FLAG" ] ||
-			{ [ $((_t - wifi_since)) -ge "$SETUP_RETRY" ] && wifi_credentials; }; then
-			rm -f "$RECONNECT_FLAG"
-			if wifi_credentials; then
-				setup_ap_stop
-				wifi_connect
-				wifi_state=try
-				wifi_since=$_t
-			else
-				wifi_since=$_t
-			fi
+		if [ -f "$RECONNECT_FLAG" ]; then
+			wifi_try_saved || wifi_since=$_t
+		elif [ $((_t - wifi_since)) -ge "$SETUP_RETRY" ]; then
+			wifi_try_saved || wifi_since=$_t
 		fi
 		;;
 	try)
@@ -96,6 +105,7 @@ wifi_tick()
 			setup_ap_start
 			wifi_state=ap
 			wifi_since=$_t
+			ap_started=$_t
 		fi
 		;;
 	esac
