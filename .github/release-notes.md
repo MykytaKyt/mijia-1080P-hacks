@@ -10,11 +10,11 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **Phones are no longer kicked off the camera's pairing network.** When the firmware's own network (`mijia-camera-…_mibtXXXX`) is up, the setup page runs there and the camera no longer replaces it with `Mijia-Setup` after 20 s. `Mijia-Setup` only starts when no network is up.
-- *Connect* on the setup page now works on the pairing network too (before, only on `Mijia-Setup`).
-- Script version 2.3 in the boot log, so you can tell which release is on the card.
+- **Fixed: the settings page rejected every password.** Basic auth in the bundled lighttpd build (static 1.4.47) rejects all passwords, even the right one. The PHP pages now check the login themselves: user `root`, password `SSH_ROOT_PASS` from `midgard.ini` (read on every request, so a new password works right away).
+- **Recordings** are now served by `/media.php` behind the same login, with seeking support (HTTP Range, needed by Safari). Before, `/media` was a plain directory listing.
+- The Wi-Fi setup page needs the camera login when opened from your home network (`/setup/` on port 8080). It stays login-free only on the setup network itself (192.168.14.x).
 
-From v1.0.2: `CLOUD_DISABLED` fixed for firmware 3.3.6 (keeps the video service that records to the SD card), clock sync without `ntpd`, and a *Turn off the Xiaomi cloud* checkbox on the setup page.
+From v1.0.3: the camera keeps its own pairing network while you use the setup page. From v1.0.2: `CLOUD_DISABLED` fixed for firmware 3.3.6, clock sync without `ntpd`.
 
 **Updating:** keep your own `midgard.ini`. The zip contains one with default settings, so copy everything except that file.
 

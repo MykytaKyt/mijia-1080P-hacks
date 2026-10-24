@@ -2,6 +2,8 @@
 
 require_once('jsonserver.php');
 require_once('data.php');
+require_once('/tmp/sd/tools/www/lib/midgard.php');
+require_login();
 
 class Service
 {

@@ -2,6 +2,11 @@
 // Wi-Fi setup page, shown on the "Mijia-Setup" access point.
 require_once('/tmp/sd/tools/www/lib/midgard.php');
 
+// No login on the setup network (192.168.14.x, protected by SETUP_AP_PASS).
+// From anywhere else, e.g. /setup/ on port 8080, require the camera login.
+$remote = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+if (strpos($remote, '192.168.14.') !== 0) require_login();
+
 $msg = '';
 $err = '';
 $done = false;

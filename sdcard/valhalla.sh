@@ -10,7 +10,7 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.3"
+SCRIPT_VERSION="2.4"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools
@@ -303,9 +303,7 @@ start_http()
 		return 0
 	fi
 	log "Starting web server on port 8080"
-	## Basic auth for the web interface, same credentials as SSH.
-	echo "root:$SSH_ROOT_PASS" > /tmp/lighttpd.user
-	chmod 600 /tmp/lighttpd.user
+	## The pages check the login (root / SSH_ROOT_PASS) themselves.
 	mkdir -p /var/run
 	run "$TOOLS/bin/lighttpd" -f "$TOOLS/etc/lighttpd.conf" || log "ERROR: lighttpd failed to start"
 }

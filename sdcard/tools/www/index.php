@@ -1,6 +1,7 @@
 <?php
 // Camera settings page (port 8080, login root / SSH_ROOT_PASS).
 require_once('/tmp/sd/tools/www/lib/midgard.php');
+require_login();
 
 $schema = midgard_schema();
 $msg = '';
@@ -88,7 +89,7 @@ $show_log = isset($_GET['log']);
 		<dt>SD card</dt><dd><?= h($st['free']) ?></dd>
 	</dl>
 	<p>
-		<a href="/media/">Recordings</a> ·
+		<a href="/media.php">Recordings</a> ·
 		<?php if ($st['snapshot']): ?><a href="/snapshot.php" target="_blank">Snapshot</a> · <?php endif; ?>
 		<a href="?log=1#log">Latest boot log</a>
 	</p>

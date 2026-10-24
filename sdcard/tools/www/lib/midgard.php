@@ -113,13 +113,45 @@ function same_origin_post()
 }
 
 // Apply a new root password right away (it is also applied on every boot).
+// The web pages read it from midgard.ini on every request.
 function apply_root_password($pass)
 {
 	$p = escapeshellarg($pass);
 	shell_exec("printf '%s\\n%s\\n' $p $p | passwd root > /dev/null 2>&1");
-	if (is_file('/tmp/lighttpd.user')) {
-		@file_put_contents('/tmp/lighttpd.user', 'root:' . $pass . "\n");
+}
+
+function camera_password()
+{
+	$values = midgard_read();
+	$pass = isset($values['SSH_ROOT_PASS']) ? $values['SSH_ROOT_PASS'] : '';
+	return ($pass === '') ? 'qwerty123456' : $pass;
+}
+
+// HTTP basic login: user root, password SSH_ROOT_PASS. Done in PHP because
+// basic auth in the bundled lighttpd build rejects every password.
+function require_login()
+{
+	$user = null;
+	$pass = null;
+	if (isset($_SERVER['PHP_AUTH_USER'])) {
+		$user = $_SERVER['PHP_AUTH_USER'];
+		$pass = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
+	} else {
+		foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $k) {
+			if (!empty($_SERVER[$k]) && stripos($_SERVER[$k], 'Basic ') === 0) {
+				$pair = explode(':', (string)base64_decode(substr($_SERVER[$k], 6)), 2);
+				if (count($pair) === 2) list($user, $pass) = $pair;
+				break;
+			}
+		}
 	}
+	if ($user === 'root' && $pass !== null && hash_equals(camera_password(), $pass)) {
+		return;
+	}
+	header('WWW-Authenticate: Basic realm="Mijia camera", charset="UTF-8"');
+	http_response_code(401);
+	header('Content-Type: text/plain');
+	exit("Login required: user root, password from SSH_ROOT_PASS in midgard.ini.\n");
 }
 
 function wifi_scan_list()

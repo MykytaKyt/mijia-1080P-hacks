@@ -99,8 +99,11 @@ All services use the user **`root`** and the password from `SSH_ROOT_PASS`.
   4 enhanced VBR). Set `RTSP_LOG=1` to log the server output to `logs/rtsp.log`.
   Control it over SSH with `/tmp/rtsp_start.sh start|stop|status`.
 * **Web:** `http://<camera-ip>:8080`: status, all settings, reboot, RTSP
-  restart, LED blink to find the camera, latest boot log, recordings under
-  `/media`. Most settings take effect after a reboot.
+  restart, LED blink to find the camera, latest boot log, and a recordings
+  browser (`/media.php`, plays in the browser, Safari included). Most
+  settings take effect after a reboot. The login (user `root`, password
+  `SSH_ROOT_PASS`) is checked by the PHP pages: basic auth in the bundled
+  lighttpd build rejects every password.
 * **Snapshot:** `http://<camera-ip>:8080/snapshot.php` returns a JPEG when an
   ARM (armv5) static build of `ffmpeg` is copied to `tools/bin/ffmpeg` and
   RTSP is enabled.

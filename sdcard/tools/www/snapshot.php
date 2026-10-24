@@ -1,4 +1,6 @@
 <?php
+require_once('/tmp/sd/tools/www/lib/midgard.php');
+require_login();
 // Current camera image as JPEG. Needs an ARM build of ffmpeg in
 // tools/bin/ffmpeg and the RTSP stream enabled.
 $ffmpeg = '/tmp/sd/tools/bin/ffmpeg';
