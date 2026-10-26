@@ -186,7 +186,7 @@ sh tools/sign_ft_boot.sh
 | `tools/valhallad.sh` | Background helper: Wi-Fi setup mode, watchdog, NTP |
 | `tools/rtsp_start.sh` | RTSP launcher and watchdog |
 | `tools/www/` | Settings page (`index.php`), setup page (`setup/`), snapshot |
-| `tools/wifi_start.sh` | Patched Wi-Fi start script, installed after an OTA |
+| `tools/wifi_start.sh` | Wi-Fi start script (stock 3.3.6 + the network from `midgard.ini`); bind-mounted over the stock one at boot (RAM only) and written to flash after an OTA |
 | `tools/post-ota.sh`, `tools/inject.sh` | OTA persistence |
 | `tools/sign_ft_boot.sh` | Re-signs `ft/ft_boot.sh` |
 | `tools/dropbear/`, `tools/sftp-server` | SSH/SFTP server |

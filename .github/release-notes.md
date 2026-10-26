@@ -10,9 +10,9 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **Setup mode no longer mistakes a downed access point for a running one.** The check looked only at the 192.168.14.1 address, which stays on the interface after it goes down. With a wrong Wi-Fi name the camera could then wait forever without opening `Mijia-Setup`. It now also checks that the interface is up and hostapd runs.
-- **Time sync**: retries without `-T` on busybox builds whose `wget` lacks it, and logs why it failed (`Time: no Date header ... (last: ...)`).
-- From v1.0.6: Wi-Fi names and passwords keep leading and trailing spaces (`Extreme `); RTSP needs `CLOUD_STREAMING_DISABLED=1`.
+- **The camera no longer opens its pairing network when `midgard.ini` has a Wi-Fi network.** The firmware's `S41wifi` starts the stock `wifi_start.sh` in the background. That script only reads the Mi Home network from nvram, so it opened `mijia-camera-…_mibtXXXX` while the hack was connecting, and whichever finished last won. Seen on a camera: hostapd and wpa_supplicant running at the same time. The hack now bind-mounts its own `wifi_start.sh` over the stock one (RAM only). It is the stock 3.3.6 script plus the network from `midgard.ini`, and `udhcpc` keeps retrying in the background.
+- From v1.0.7: setup mode checks that the access point really runs; time sync logs why it failed.
+- From v1.0.6: Wi-Fi names and passwords keep leading and trailing spaces; RTSP needs `CLOUD_STREAMING_DISABLED=1`.
 
 From v1.0.4: the web login is checked by the PHP pages (the bundled lighttpd rejected every password), and recordings are served by `/media.php` with seeking.
 

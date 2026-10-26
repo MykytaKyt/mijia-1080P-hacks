@@ -10,7 +10,7 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.7"
+SCRIPT_VERSION="2.8"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools
@@ -205,6 +205,25 @@ connect_wifi_override()
 	# shellcheck disable=SC2034 # used by wifi_connect
 	[ "$WIFI_KEY_MGMT" = "NONE" ] && WIFI_PASSWD=""
 	wifi_connect
+}
+
+## Run the hack's wifi_start.sh (the stock 3.3.6 one + the network from
+## midgard.ini) instead of the stock script. S41wifi starts it in the
+## background, and the stock script, which only reads nvram, would open the
+## Mi Home pairing network while we connect: whichever finished last won.
+## RAM only: a bind mount from /tmp, gone after a reboot without the card.
+install_wifi_start()
+{
+	_stock=/mnt/data/ot_wifi_tool/wifi_start.sh
+	[ -n "$WIFI_SSID" ] || return 1
+	[ -f "$_stock" ] || return 1
+	grep -q " $_stock " /proc/mounts && return 0
+	cp "$TOOLS/wifi_start.sh" /tmp/wifi_start.sh && chmod 755 /tmp/wifi_start.sh || return 1
+	if run mount --bind /tmp/wifi_start.sh "$_stock"; then
+		log "Wi-Fi: using the hack's wifi_start.sh (network from midgard.ini)"
+		return 0
+	fi
+	return 1
 }
 
 restart_wifi()
@@ -429,8 +448,13 @@ valhalla_main()
 	enabled "$ENGLISH_VOICE" && set_english_voice
 	setup_ota
 	hostname "$CAM_HOSTNAME"
-	restart_wifi
-	connect_wifi_override
+	if install_wifi_start; then
+		## S41wifi now joins the midgard.ini network by itself.
+		restart_wifi
+	else
+		restart_wifi
+		connect_wifi_override
+	fi
 	init_gm_driver
 	setup_cloud
 	setup_rtsp
