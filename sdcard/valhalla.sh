@@ -10,7 +10,7 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.5"
+SCRIPT_VERSION="2.6"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools
@@ -50,8 +50,8 @@ load_config()
 	HTTP_ENABLED=$(cfg HTTP_ENABLED 1)
 	SAMBA_ENABLED=$(cfg SAMBA_ENABLED 0)
 	ENGLISH_VOICE=$(cfg ENGLISH_VOICE 1)
-	WIFI_SSID=$(cfg miio_ssid "")
-	WIFI_PASSWD=$(cfg miio_passwd "")
+	WIFI_SSID=$(cfg_raw miio_ssid)
+	WIFI_PASSWD=$(cfg_raw miio_passwd)
 	WIFI_KEY_MGMT=$(cfg miio_key_mgmt "WPA")
 	RTSP_ALLOW=$(cfg RTSP_ALLOW "")
 	TIMEZONE=$(cfg TIMEZONE "")
@@ -68,7 +68,7 @@ load_config()
 	log "  HTTP_ENABLED=$HTTP_ENABLED"
 	log "  SAMBA_ENABLED=$SAMBA_ENABLED"
 	log "  ENGLISH_VOICE=$ENGLISH_VOICE"
-	log "  miio_ssid=$WIFI_SSID"
+	log "  miio_ssid='$WIFI_SSID'"
 	log "  RTSP_ALLOW=$RTSP_ALLOW"
 	log "  TIMEZONE=$TIMEZONE"
 

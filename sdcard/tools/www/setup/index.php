@@ -13,8 +13,8 @@ $done = false;
 $values = midgard_read();
 
 if (same_origin_post()) {
-	$ssid = midgard_clean(isset($_POST['ssid']) ? $_POST['ssid'] : '');
-	$pass = midgard_clean(isset($_POST['pass']) ? $_POST['pass'] : '');
+	$ssid = midgard_clean(isset($_POST['ssid']) ? $_POST['ssid'] : '', true);
+	$pass = midgard_clean(isset($_POST['pass']) ? $_POST['pass'] : '', true);
 	$open = !empty($_POST['open']);
 	$root = midgard_clean(isset($_POST['root']) ? $_POST['root'] : '');
 

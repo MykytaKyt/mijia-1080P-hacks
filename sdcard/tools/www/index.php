@@ -14,7 +14,7 @@ if (same_origin_post()) {
 		$updates = array();
 		foreach ($schema as $fields) {
 			foreach ($fields as $key => $f) {
-				$v = isset($_POST[$key]) ? midgard_clean($_POST[$key]) : '';
+				$v = isset($_POST[$key]) ? midgard_clean($_POST[$key], midgard_is_raw($key)) : '';
 				if ($f[0] === 'bool') $v = ($v === '1') ? '1' : '0';
 				if ($f[0] === 'number' && $v !== '' && !preg_match('/^[0-9]+$/', $v)) {
 					$err = $f[1] . ': enter a whole number.';

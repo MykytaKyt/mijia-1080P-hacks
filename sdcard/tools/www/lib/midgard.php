@@ -49,6 +49,13 @@ function midgard_schema()
 	);
 }
 
+// The Wi-Fi name and password are kept exactly as typed: a network can be
+// called "Extreme " with a trailing space. Other values are trimmed.
+function midgard_is_raw($key)
+{
+	return $key === 'miio_ssid' || $key === 'miio_passwd';
+}
+
 function midgard_read()
 {
 	$values = array();
@@ -57,16 +64,17 @@ function midgard_read()
 	foreach ($lines as $line) {
 		$line = rtrim($line, "\r");
 		if (preg_match('/^\s*([A-Za-z0-9_]+)\s*=(.*)$/', $line, $m)) {
-			$values[$m[1]] = trim($m[2]);
+			$values[$m[1]] = midgard_is_raw($m[1]) ? $m[2] : trim($m[2]);
 		}
 	}
 	return $values;
 }
 
-// Values must be a single line.
-function midgard_clean($value)
+// Values must be a single line. $raw keeps leading and trailing spaces.
+function midgard_clean($value, $raw = false)
 {
-	return trim(str_replace(array("\r", "\n"), '', (string)$value));
+	$value = str_replace(array("\r", "\n"), '', (string)$value);
+	return $raw ? $value : trim($value);
 }
 
 // Update keys in midgard.ini, keeping comments and order. Returns true on success.
@@ -78,7 +86,7 @@ function midgard_write($updates)
 	$lines = ($text === '') ? array() : preg_split('/\r?\n/', rtrim($text, "\r\n"));
 
 	foreach ($updates as $key => $value) {
-		$value = midgard_clean($value);
+		$value = midgard_clean($value, midgard_is_raw($key));
 		$found = false;
 		foreach ($lines as $i => $line) {
 			if (preg_match('/^\s*' . preg_quote($key, '/') . '\s*=/', $line)) {

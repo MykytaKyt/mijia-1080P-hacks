@@ -10,7 +10,9 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **Fixed: saving settings failed with "Call to undefined function ctype_digit()".** The bundled PHP is built without the ctype extension; number fields are now checked with a regular expression.
+- **Wi-Fi names and passwords with leading or trailing spaces work** (e.g. a network called `Extreme `). They were trimmed before, so the camera looked for a network that does not exist. Other settings are still trimmed.
+- **RTSP: set `CLOUD_STREAMING_DISABLED=1` too.** Confirmed on a camera: while the firmware's `miio_avstreamer` runs, it shares the encoder channel with `rtsp_basic` and the stream turns into smeared blocks. The README, `midgard.ini`, the settings page and the boot log now say so.
+- From v1.0.5: saving the settings page no longer fails with `ctype_digit()`.
 
 From v1.0.4: the web login is checked by the PHP pages (the bundled lighttpd rejected every password), and recordings are served by `/media.php` with seeking.
 

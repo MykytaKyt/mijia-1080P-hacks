@@ -31,6 +31,13 @@ cfg()
 	echo "$_v"
 }
 
+## cfg_raw KEY - like cfg, but keeps leading and trailing spaces. Used for
+## the Wi-Fi name and password, which may end in a space ("Extreme ").
+cfg_raw()
+{
+	grep -E "^[[:space:]]*$1[[:space:]]*=" "$INI" 2>/dev/null | tail -n 1 | cut -d '=' -f 2- | tr -d '\r'
+}
+
 enabled()
 {
 	[ "$1" = "1" ]
@@ -54,8 +61,8 @@ wifi_ip()
 ## network stored by the Mi Home app. Returns 1 when none is configured.
 wifi_credentials()
 {
-	WIFI_SSID=$(cfg miio_ssid "")
-	WIFI_PASSWD=$(cfg miio_passwd "")
+	WIFI_SSID=$(cfg_raw miio_ssid)
+	WIFI_PASSWD=$(cfg_raw miio_passwd)
 	WIFI_KEY_MGMT=$(cfg miio_key_mgmt "WPA")
 	if [ -z "$WIFI_SSID" ] && [ -x /usr/sbin/nvram ]; then
 		WIFI_SSID=$(/usr/sbin/nvram get miio_ssid 2>/dev/null)
