@@ -10,9 +10,9 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
-- **Wi-Fi names and passwords with leading or trailing spaces work** (e.g. a network called `Extreme `). They were trimmed before, so the camera looked for a network that does not exist. Other settings are still trimmed.
-- **RTSP: set `CLOUD_STREAMING_DISABLED=1` too.** Confirmed on a camera: while the firmware's `miio_avstreamer` runs, it shares the encoder channel with `rtsp_basic` and the stream turns into smeared blocks. The README, `midgard.ini`, the settings page and the boot log now say so.
-- From v1.0.5: saving the settings page no longer fails with `ctype_digit()`.
+- **Setup mode no longer mistakes a downed access point for a running one.** The check looked only at the 192.168.14.1 address, which stays on the interface after it goes down. With a wrong Wi-Fi name the camera could then wait forever without opening `Mijia-Setup`. It now also checks that the interface is up and hostapd runs.
+- **Time sync**: retries without `-T` on busybox builds whose `wget` lacks it, and logs why it failed (`Time: no Date header ... (last: ...)`).
+- From v1.0.6: Wi-Fi names and passwords keep leading and trailing spaces (`Extreme `); RTSP needs `CLOUD_STREAMING_DISABLED=1`.
 
 From v1.0.4: the web login is checked by the PHP pages (the bundled lighttpd rejected every password), and recordings are served by `/media.php` with seeking.
 

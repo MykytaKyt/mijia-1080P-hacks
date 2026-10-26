@@ -181,7 +181,14 @@ EOF
 ## Mi Home pairing network ("...-camera-..._mibtXXXX"), both on 192.168.14.1.
 ap_is_up()
 {
-	ifconfig uap0 2>/dev/null | grep -q "inet addr:$AP_IP"
+	## A downed interface keeps its address, so also check that it is UP
+	## and that an access point daemon runs.
+	_if=$(ifconfig uap0 2>/dev/null)
+	case "$_if" in
+	*"inet addr:$AP_IP "*) ;;
+	*) return 1 ;;
+	esac
+	echo "$_if" | grep -q " UP " && pidof hostapd > /dev/null 2>&1
 }
 
 ## Serve the Wi-Fi setup page on http://192.168.14.1 (port 80).

@@ -144,12 +144,24 @@ ntp_last=0
 http_time_sync()
 {
 	_d=""
+	_err=""
 	for _url in http://captive.apple.com/ http://connectivitycheck.gstatic.com/generate_204 \
 		http://www.msftconnecttest.com/connecttest.txt; do
-		_d=$(wget -S -O /dev/null -T 10 "$_url" 2>&1 | sed -n 's/^ *[Dd]ate: *//p' | head -n 1 | tr -d '\r')
+		_out=$(wget -S -O /dev/null -T 10 "$_url" 2>&1)
+		case "$_out" in
+		*"nrecognized option"* | *"nvalid option"* | *"Usage:"*)
+			## Older busybox wget without -T
+			_out=$(wget -S -O /dev/null "$_url" 2>&1)
+			;;
+		esac
+		_d=$(echo "$_out" | sed -n 's/^ *[Dd]ate: *//p' | head -n 1 | tr -d '\r')
 		[ -n "$_d" ] && break
+		_err="$_url: $(echo "$_out" | grep -v '^ *$' | tail -n 1)"
 	done
-	[ -n "$_d" ] || return 1
+	if [ -z "$_d" ]; then
+		log "Time: no Date header from any server (last: $_err)"
+		return 1
+	fi
 	## "Sat, 24 Oct 2026 15:04:05 GMT"
 	# shellcheck disable=SC2086 # split the date into words
 	set -- $_d
