@@ -20,7 +20,7 @@ hook, see below).
 | Clock sync (NTP) and time zone | `NTP_ENABLED`, `TIMEZONE` | NTP on |
 | Night mode without the Xiaomi cloud (night picture profile, no IR LEDs) | `NIGHT_MODE` | off |
 | System log in RAM instead of the SD card, copy to a syslog server | `SYSLOG_SD`, `SYSLOG_SERVER` | RAM |
-| Watchdog for SSH, web server and Samba | (always) | on |
+| Watchdog for SSH, web server, Samba and the Wi-Fi connection | (always) | on |
 | Snapshot `/snapshot.php` (needs `tools/bin/ffmpeg`) | — | — |
 | Block video streaming to the Xiaomi cloud | `CLOUD_STREAMING_DISABLED` | off |
 | Cut the camera off from the Xiaomi cloud | `CLOUD_DISABLED` | off |
@@ -79,7 +79,9 @@ page, user `root`), and check `logs/boot-*.log` on the card.
 
 The camera also falls back to setup mode when the saved network is not
 reachable at boot, and tries the saved network again every 10 minutes
-(`SETUP_RETRY`). To pair the camera with the Mi Home app instead, set
+(`SETUP_RETRY`). Once connected, the camera joins the network again when the
+gateway stops answering for 60 seconds (for example after the router drops it).
+To pair the camera with the Mi Home app instead, set
 `WIFI_SETUP_AP=0`.
 
 `midgard.ini` may be edited on Windows: Windows line endings are handled.

@@ -11,6 +11,11 @@
 ##
 ## Stop it with: touch /tmp/valhalla.stop
 
+## ifconfig, iwconfig, reboot... live in /sbin, which is not in PATH
+## when the daemon is restarted from an SSH session.
+PATH=/sbin:/usr/sbin:/bin:/usr/bin:$PATH
+export PATH
+
 . /tmp/valhalla.env
 . /tmp/valhalla_lib.sh
 
@@ -97,6 +102,9 @@ wifi_tick()
 			wifi_try_saved || wifi_since=$_t
 		fi
 		;;
+	ok)
+		link_tick
+		;;
 	try)
 		if wifi_connected; then
 			log "Wi-Fi connected, IP $(wifi_ip)"
@@ -111,6 +119,54 @@ wifi_tick()
 		;;
 	esac
 	echo "$wifi_state" > /tmp/wifi_state
+}
+
+## --- Wi-Fi link watchdog ---------------------------------------------
+## The router can drop the camera (seen: "Received disassociation request
+## on mlan0"), and the camera then stayed offline. mlan0 keeps its IP
+## address after that, so check that the gateway answers instead, and
+## join the network again after LINK_TIMEOUT seconds without it.
+
+LINK_TIMEOUT=60
+link_lost=0
+
+gateway()
+{
+	awk '$1 == "mlan0" && $2 == "00000000" {
+		g = $3
+		printf "%d.%d.%d.%d\n", "0x" substr(g, 7, 2), "0x" substr(g, 5, 2), "0x" substr(g, 3, 2), "0x" substr(g, 1, 2)
+		exit
+	}' /proc/net/route
+}
+
+link_ok()
+{
+	_gw=$(gateway)
+	[ -n "$_gw" ] || return 1
+	ping -c 1 -W 2 "$_gw" > /dev/null 2>&1 || ping -c 1 -W 2 "$_gw" > /dev/null 2>&1
+}
+
+link_tick()
+{
+	## Only with a network from midgard.ini, and every other tick.
+	wifi_credentials || return 0
+	[ $((_n % 2)) -eq 0 ] || return 0
+	_t=$(now)
+	if link_ok; then
+		if [ "$link_lost" -ne 0 ]; then
+			log "Wi-Fi: gateway reachable again"
+			link_lost=0
+		fi
+		return 0
+	fi
+	if [ "$link_lost" -eq 0 ]; then
+		link_lost=$_t
+		return 0
+	fi
+	[ $((_t - link_lost)) -ge "$LINK_TIMEOUT" ] || return 0
+	log "Wi-Fi: no gateway for $((_t - link_lost))s, connecting to '$WIFI_SSID' again"
+	wifi_connect
+	link_lost=$_t
 }
 
 ## --- service watchdog ------------------------------------------------
@@ -200,8 +256,8 @@ ntp_tick()
 ## the ISP measures. The IR LEDs and the IR-cut filter are not touched.
 
 NIGHT_MODE=$(cfg NIGHT_MODE off)
-NIGHT_EV_ON=$(cfg NIGHT_EV_ON 40)
-NIGHT_EV_OFF=$(cfg NIGHT_EV_OFF 150)
+NIGHT_EV_ON=$(cfg NIGHT_EV_ON 150)
+NIGHT_EV_OFF=$(cfg NIGHT_EV_OFF 500)
 NIGHT_TICKS=3
 ISP_CMD=/proc/isp328/command
 ISP_CFG=/gm/config/isp328_ov2718

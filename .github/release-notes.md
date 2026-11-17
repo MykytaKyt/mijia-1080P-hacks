@@ -10,6 +10,12 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
+- **The camera joins the Wi-Fi again when the router drops it.** Seen on a camera: the router sent a disassociation request and the camera stayed offline until a power cycle. `valhallad` now pings the gateway and connects again after 60 seconds without an answer.
+- Night mode: the default thresholds are now `NIGHT_EV_ON=150` and `NIGHT_EV_OFF=500`. With 40 a camera covered by a hand (EV about 120) never switched.
+- `valhallad` sets its own `PATH`, so it also works when restarted from an SSH session.
+
+From v1.0.9:
+
 - **Night mode without the Xiaomi cloud.** `NIGHT_MODE=auto` switches the picture to the night profile when it gets dark and back in the morning, from the brightness the camera measures. The IR LEDs stay off: writing to them from the hack hangs the camera.
 - **System log in RAM.** The factory-test boot hook made the firmware write the whole system log to the SD card. A hang then cost the last writes and damaged the card's file system. `SYSLOG_SERVER` sends the log to another machine.
 
