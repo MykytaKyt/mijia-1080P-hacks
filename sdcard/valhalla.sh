@@ -10,7 +10,7 @@
 ##  All settings live in midgard.ini on the SD card root.
 ## =====================================================================
 
-SCRIPT_VERSION="2.8"
+SCRIPT_VERSION="2.9"
 
 sd_mountdir=/tmp/sd
 TOOLS=$sd_mountdir/tools
@@ -56,6 +56,9 @@ load_config()
 	RTSP_ALLOW=$(cfg RTSP_ALLOW "")
 	TIMEZONE=$(cfg TIMEZONE "")
 	LOG_KEEP=$(cfg LOG_KEEP 10)
+	SYSLOG_SD=$(cfg SYSLOG_SD 0)
+	SYSLOG_SERVER=$(cfg SYSLOG_SERVER "")
+	NIGHT_MODE=$(cfg NIGHT_MODE off)
 
 	log "Configuration:"
 	log "  CLOUD_DISABLED=$CLOUD_DISABLED"
@@ -71,6 +74,9 @@ load_config()
 	log "  miio_ssid='$WIFI_SSID'"
 	log "  RTSP_ALLOW=$RTSP_ALLOW"
 	log "  TIMEZONE=$TIMEZONE"
+	log "  NIGHT_MODE=$NIGHT_MODE"
+	log "  SYSLOG_SD=$SYSLOG_SD"
+	log "  SYSLOG_SERVER=$SYSLOG_SERVER"
 
 	if [ "$SSH_ROOT_PASS" = "qwerty123456" ]; then
 		log "WARNING: the default root password is in use, change SSH_ROOT_PASS in midgard.ini"
@@ -404,7 +410,28 @@ setup_rtsp_firewall()
 		run iptables -I INPUT -p tcp --dport 554 -j VALHALLA_RTSP
 }
 
-## Background helper: Wi-Fi setup mode, service watchdog, NTP.
+## Because of the factory-test boot hook, the firmware writes the whole
+## system log to the SD card (log/MTBF/MTBF_log). When the camera hangs,
+## the card loses the last writes and its file system gets damaged. Keep
+## the log in RAM instead, optionally with a copy on a syslog server.
+setup_syslog()
+{
+	enabled "$SYSLOG_SD" && return 0
+	[ -x /sbin/syslogd ] || return 0
+	log "System log in RAM (/var/log/messages)${SYSLOG_SERVER:+, copy to $SYSLOG_SERVER}"
+	start-stop-daemon -K -q -p /var/run/syslogd.pid > /dev/null 2>&1
+	killall syslogd > /dev/null 2>&1
+	mkdir -p /var/log
+	if [ -n "$SYSLOG_SERVER" ]; then
+		start-stop-daemon -b -S -q -m -p /var/run/syslogd.pid --exec /sbin/syslogd -- \
+			-n -S -s 200 -b 1 -O /var/log/messages -R "$SYSLOG_SERVER" -L
+	else
+		start-stop-daemon -b -S -q -m -p /var/run/syslogd.pid --exec /sbin/syslogd -- \
+			-n -S -s 200 -b 1 -O /var/log/messages
+	fi
+}
+
+## Background helper: Wi-Fi setup mode, service watchdog, NTP, night mode.
 start_daemon()
 {
 	if [ -f /var/run/valhallad.pid ] && kill -0 "$(cat /var/run/valhallad.pid)" 2>/dev/null; then
@@ -420,7 +447,7 @@ start_daemon()
 		echo "HTTP_ENABLED='$HTTP_ENABLED'"
 		echo "SAMBA_ENABLED='$SAMBA_ENABLED'"
 	} > /tmp/valhalla.env
-	log "Starting valhallad (Wi-Fi setup mode, watchdog, NTP)"
+	log "Starting valhallad (Wi-Fi setup mode, watchdog, NTP, night mode)"
 	sh /tmp/valhallad.sh < /dev/null > /dev/null 2>&1 &
 }
 
@@ -443,6 +470,7 @@ valhalla_main()
 	echo 4 > /tmp/ft_mode
 
 	setup_etc_overlay && set_root_password
+	setup_syslog
 	set_timezone
 	start_ssh
 	enabled "$ENGLISH_VOICE" && set_english_voice

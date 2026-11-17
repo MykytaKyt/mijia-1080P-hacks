@@ -10,6 +10,11 @@ See the [README](https://github.com/MykytaKyt/mijia-1080P-hacks#readme) for all 
 
 ## Changes in this release
 
+- **Night mode without the Xiaomi cloud.** `NIGHT_MODE=auto` switches the picture to the night profile when it gets dark and back in the morning, from the brightness the camera measures. The IR LEDs stay off: writing to them from the hack hangs the camera.
+- **System log in RAM.** The factory-test boot hook made the firmware write the whole system log to the SD card. A hang then cost the last writes and damaged the card's file system. `SYSLOG_SERVER` sends the log to another machine.
+
+From v1.0.8:
+
 - **The camera no longer opens its pairing network when `midgard.ini` has a Wi-Fi network.** The firmware's `S41wifi` starts the stock `wifi_start.sh` in the background. That script only reads the Mi Home network from nvram, so it opened `mijia-camera-…_mibtXXXX` while the hack was connecting, and whichever finished last won. Seen on a camera: hostapd and wpa_supplicant running at the same time. The hack now bind-mounts its own `wifi_start.sh` over the stock one (RAM only). It is the stock 3.3.6 script plus the network from `midgard.ini`, and `udhcpc` keeps retrying in the background.
 - From v1.0.7: setup mode checks that the access point really runs; time sync logs why it failed.
 - From v1.0.6: Wi-Fi names and passwords keep leading and trailing spaces; RTSP needs `CLOUD_STREAMING_DISABLED=1`.

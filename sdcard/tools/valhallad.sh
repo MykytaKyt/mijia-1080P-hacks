@@ -7,6 +7,7 @@
 ##     at http://192.168.14.1. Retry the configured network regularly.
 ##   * Restart SSH, the web server and Samba if they die.
 ##   * Sync the clock with NTP.
+##   * Switch the image between the day and night profiles.
 ##
 ## Stop it with: touch /tmp/valhalla.stop
 
@@ -191,6 +192,81 @@ ntp_tick()
 	fi
 }
 
+## --- night mode ------------------------------------------------------
+## The stock firmware switches day/night in miot_devicekit, which the
+## cloud options stop. It also drives the IR LEDs, and writing to the IR
+## LED from the hack hangs the camera. So only the image profile is
+## switched here (black and white, more gain), from the scene brightness
+## the ISP measures. The IR LEDs and the IR-cut filter are not touched.
+
+NIGHT_MODE=$(cfg NIGHT_MODE off)
+NIGHT_EV_ON=$(cfg NIGHT_EV_ON 40)
+NIGHT_EV_OFF=$(cfg NIGHT_EV_OFF 150)
+NIGHT_TICKS=3
+ISP_CMD=/proc/isp328/command
+ISP_CFG=/gm/config/isp328_ov2718
+
+## The firmware starts in the day profile.
+night_state=day
+night_count=0
+night_hold=0
+
+isp_ev()
+{
+	sed -n 's/^ *ev value *\([0-9][0-9]*\).*/\1/p' /proc/isp328/ae/info 2>/dev/null | head -n 1
+}
+
+night_set()
+{
+	[ -w "$ISP_CMD" ] || return 1
+	if [ "$1" = night ]; then
+		echo "w daynight 1" > "$ISP_CMD"
+		echo "w dr_mode 0" > "$ISP_CMD"
+		echo "w reload_cfg ${ISP_CFG}_night.cfg" > "$ISP_CMD"
+	else
+		echo "w daynight 0" > "$ISP_CMD"
+		echo "w reload_cfg ${ISP_CFG}.cfg" > "$ISP_CMD"
+	fi
+	night_state=$1
+	echo "$1" > /tmp/night_state
+	log "Night mode: $1 ($2)"
+}
+
+night_tick()
+{
+	case $NIGHT_MODE in
+	night)
+		[ "$night_state" = night ] || night_set night "always on"
+		return 0
+		;;
+	auto) ;;
+	*) return 0 ;;
+	esac
+	## Let the exposure settle after a switch.
+	if [ "$night_hold" -gt 0 ]; then
+		night_hold=$((night_hold - 1))
+		return 0
+	fi
+	_ev=$(isp_ev)
+	[ -n "$_ev" ] || return 0
+	echo "$_ev" > /tmp/night_ev
+	_want=$night_state
+	if [ "$_ev" -lt "$NIGHT_EV_ON" ]; then
+		_want=night
+	elif [ "$_ev" -gt "$NIGHT_EV_OFF" ]; then
+		_want=day
+	fi
+	if [ "$_want" = "$night_state" ]; then
+		night_count=0
+		return 0
+	fi
+	night_count=$((night_count + 1))
+	[ "$night_count" -ge "$NIGHT_TICKS" ] || return 0
+	night_count=0
+	night_hold=6
+	night_set "$_want" "EV $_ev"
+}
+
 ## --- main loop -------------------------------------------------------
 
 echo $$ > "$PIDFILE"
@@ -199,6 +275,7 @@ log "valhallad started"
 _n=0
 while [ ! -f "$STOPFILE" ]; do
 	wifi_tick
+	night_tick
 	if [ $((_n % 12)) -eq 0 ]; then
 		services_tick
 		ntp_tick

@@ -28,6 +28,11 @@ function midgard_schema()
 			'RTSP_ALLOW' => array('text', 'Allow RTSP only from', 'Comma-separated IPs or networks, e.g. 192.168.1.0/24. Empty: everyone.'),
 			'RTSP_LOG' => array('bool', 'RTSP debug log', 'Writes logs/rtsp.log on the SD card.'),
 		),
+		'Night mode' => array(
+			'NIGHT_MODE' => array('select', 'Night mode', 'Night profile: black and white picture, more gain. The IR LEDs stay off. "Firmware" only works with the Xiaomi cloud on.', array('off' => 'Firmware', 'auto' => 'Automatic', 'night' => 'Always night')),
+			'NIGHT_EV_ON' => array('number', 'Night below EV', 'Automatic mode: switch to night when the brightness (EV) stays below this.'),
+			'NIGHT_EV_OFF' => array('number', 'Day above EV', 'Automatic mode: switch back to day above this. Keep it well above the night value.'),
+		),
 		'Xiaomi cloud' => array(
 			'CLOUD_DISABLED' => array('bool', 'Turn off the Xiaomi cloud', 'Stops the Mi Home app connection, BLE pairing, OTA and restartd. The video service (SD card recording) keeps running.'),
 			'CLOUD_STREAMING_DISABLED' => array('bool', 'Turn off the Xiaomi video service', 'Stops miio_avstreamer: no cloud video, but also no recording to the SD card and no voice prompts.'),
@@ -45,6 +50,8 @@ function midgard_schema()
 			'NTP_ENABLED' => array('bool', 'Sync clock (NTP)', ''),
 			'NTP_SERVER' => array('text', 'NTP server', ''),
 			'LOG_KEEP' => array('number', 'Boot logs to keep', ''),
+			'SYSLOG_SD' => array('bool', 'System log on the SD card', 'Off: keep it in RAM. Writing it to the card wears the card and damages its file system when the camera hangs.'),
+			'SYSLOG_SERVER' => array('text', 'Send the system log to', 'Syslog server (UDP), e.g. 192.168.1.10:514. Empty: off.'),
 		),
 	);
 }
@@ -186,6 +193,10 @@ function cam_status()
 	$s['rtsp'] = trim(shell_exec('/tmp/rtsp_start.sh status 2>/dev/null'));
 	$s['free'] = trim(shell_exec("df -h /tmp/sd 2>/dev/null | tail -n 1 | awk '{print $4 \" free of \" $2}'"));
 	$s['snapshot'] = is_file(TOOLS_DIR . '/bin/ffmpeg');
+	$night = trim(@file_get_contents('/tmp/night_state'));
+	$ae = @file_get_contents('/proc/isp328/ae/info');
+	$ev = ($ae !== false && preg_match('/ev value\s+(\d+)/', $ae, $m)) ? $m[1] : '';
+	$s['night'] = ($night === 'night' ? 'Night' : 'Day') . ($ev !== '' ? ", brightness EV $ev" : '');
 	return $s;
 }
 

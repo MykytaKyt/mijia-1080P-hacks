@@ -84,6 +84,7 @@ $show_log = isset($_GET['log']);
 		<dt>Wi-Fi</dt><dd><?= h($st['wifi'] ? $st['wifi'] : 'unknown') ?></dd>
 		<dt>RTSP</dt><dd><?= h($st['rtsp'] ? $st['rtsp'] : 'not running') ?>
 			<?php if ($st['ip']): ?><br><code>rtsp://<?= h($st['ip']) ?>/live/ch00_0</code><?php endif; ?></dd>
+		<dt>Picture</dt><dd><?= h($st['night']) ?></dd>
 		<dt>Time</dt><dd><?= h($st['time']) ?></dd>
 		<dt>Uptime</dt><dd><?= h($st['uptime']) ?></dd>
 		<dt>SD card</dt><dd><?= h($st['free']) ?></dd>

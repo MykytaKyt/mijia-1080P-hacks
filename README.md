@@ -18,6 +18,8 @@ hook, see below).
 | Local RTSP stream, restarted automatically if it crashes | `RTSP_ENABLED`, `CONFIG_LINE` | off |
 | Limit RTSP to some IPs/networks | `RTSP_ALLOW` | everyone |
 | Clock sync (NTP) and time zone | `NTP_ENABLED`, `TIMEZONE` | NTP on |
+| Night mode without the Xiaomi cloud (night picture profile, no IR LEDs) | `NIGHT_MODE` | off |
+| System log in RAM instead of the SD card, copy to a syslog server | `SYSLOG_SD`, `SYSLOG_SERVER` | RAM |
 | Watchdog for SSH, web server and Samba | (always) | on |
 | Snapshot `/snapshot.php` (needs `tools/bin/ffmpeg`) | — | — |
 | Block video streaming to the Xiaomi cloud | `CLOUD_STREAMING_DISABLED` | off |
@@ -136,6 +138,29 @@ settings.
 * `CLOUD_STREAMING_DISABLED=1`: also stops `miio_avstreamer`, the firmware's
   video service. No video leaves your network, but recording to the SD card
   and the voice prompts stop too. RTSP keeps working.
+
+### Night mode
+
+In the stock firmware `miot_devicekit` switches between day and night.
+`CLOUD_DISABLED` stops it, so without the hack's night mode the picture
+stays in the day profile. `NIGHT_MODE=auto` switches the image to the
+night profile (black and white, more gain) when the scene brightness the
+camera measures (EV) stays below `NIGHT_EV_ON` for about 15 seconds, and
+back above `NIGHT_EV_OFF`. The settings page shows the current EV, so you
+can tune both values. `NIGHT_MODE=night` keeps the night profile on.
+
+The IR LEDs and the IR-cut filter are not switched: writing to the IR LED
+from the hack hangs the camera. In a dark room the night picture is
+therefore dark too; it helps where some light remains (street lights).
+
+### System log
+
+Because the hack starts through the factory-test boot hook, the firmware
+writes the whole system log to `log/MTBF/MTBF_log` on the card. When the
+camera hangs, the card loses the last writes and its file system gets
+damaged. The hack moves the log to RAM (`/var/log/messages`) unless
+`SYSLOG_SD=1`. To keep the log across a hang, send it to another machine:
+`SYSLOG_SERVER=192.168.1.10:514` (UDP syslog).
 
 ### Time
 
